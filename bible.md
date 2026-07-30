@@ -1,53 +1,53 @@
-# Библия проекта (@kitana-sdk/bible)
+# Project Bible (@kitana-sdk/bible)
 
-## Проблема которую решает
+## The problem it solves
 
-**Проблема 1 — пайплайн упал на середине**
-Агентный пайплайн из трёх шагов упал на шаге 2. Без Библии — начинаем сначала, тратим токены, теряем результат шага 1. С Библией — читаем что уже сделано и продолжаем с шага 2.
+**Problem 1 — the pipeline crashes halfway through**
+A three-step agentic pipeline crashes at step 2. Without the Bible — start over, burn tokens, lose step 1's result. With the Bible — read what's already done and continue from step 2.
 
-**Проблема 2 — failover между моделями**
-Claude упал, переключились на Ollama. Но Ollama не знает контекста предыдущих шагов. Библия передаёт этот контекст в сжатом виде.
+**Problem 2 — failover between models**
+Claude goes down, we switch to Ollama. But Ollama doesn't know the context from the previous steps. The Bible carries that context over, compressed.
 
-## Аналогии
+## Analogies
 
-- Библия = git + checkpoint
-- `progress.md` = git log (что было сделано)
-- `snapshots/` = CI артефакты (полные результаты)
-- `mission.md` = README (не меняется, объясняет зачем)
+- Bible = git + checkpoint
+- `progress.md` = git log (what's been done)
+- `snapshots/` = CI artifacts (full results)
+- `mission.md` = README (never changes, explains why)
 
-## Структура на диске
+## On-disk structure
 
 ```
 .kitana/
   bible/
-    mission.md              — цель проекта, ICP, не меняется никогда
-    progress.md             — лог что сделал каждый агент
+    mission.md              — project goal, ICP, never changes
+    progress.md             — log of what each agent did
     snapshots/
-      01_analyst.json       — полный результат шага 1
-      02_copywriter.json    — полный результат шага 2
+      01_analyst.json       — full result of step 1
+      02_copywriter.json    — full result of step 2
 ```
 
-## mission.md формат
+## mission.md format
 
 ```markdown
 # Project Mission
 
-## Цель
-[Что мы строим и зачем]
+## Goal
+[What we're building and why]
 
 ## ICP (ideal customer)
-[Для кого это]
+[Who this is for]
 
-## Ключевые ограничения
-[Что нельзя делать]
+## Key constraints
+[What must not be done]
 
-## Успех выглядит как
-[Критерии готовности]
+## Success looks like
+[Readiness criteria]
 ```
 
-Этот файл создаётся один раз и не меняется автоматически. Только руками.
+This file is created once and never changes automatically. Hand-edited only.
 
-## progress.md формат
+## progress.md format
 
 ```markdown
 # Progress Log
@@ -56,13 +56,13 @@ Claude упал, переключились на Ollama. Но Ollama не зна
 Provider: claude-sonnet-4-6
 Tokens: 1500
 Status: completed
-Summary: Проанализировал рынок, выявил 3 конкурента: X, Y, Z
+Summary: Analyzed the market, found 3 competitors: X, Y, Z
 
 ## Step 2 — copywriter [2026-07-30T10:05:00Z]
-Provider: ollama/llama3 (failover от claude)
+Provider: ollama/llama3 (failover from claude)
 Tokens: 800
 Status: completed
-Summary: Написал 5 вариантов заголовка, лучший: "..."
+Summary: Wrote 5 headline variants, best one: "..."
 ```
 
 ## API
@@ -72,16 +72,16 @@ import { Bible } from '@kitana-sdk/bible'
 
 const bible = new Bible({ path: '.kitana' })
 
-// Читаем контекст перед шагом
+// Read context before a step
 const context = await bible.read()
 // {
-//   mission: string,       — содержимое mission.md
-//   progress: string,      — содержимое progress.md
-//   lastStep: string,      — последний завершённый шаг
-//   snapshots: string[]    — список доступных снапшотов
+//   mission: string,       — contents of mission.md
+//   progress: string,      — contents of progress.md
+//   lastStep: string,      — last completed step
+//   snapshots: string[]    — list of available snapshots
 // }
 
-// Обновляем после шага — ОБЯЗАТЕЛЬНО
+// Update after a step — MANDATORY
 await bible.update({
   step: 'analyst',
   stepIndex: 1,
@@ -89,49 +89,49 @@ await bible.update({
   tokensUsed: 1500,
   provider: 'claude-sonnet-4-6'
 })
-// Создаёт: snapshots/01_analyst.json
-// Обновляет: progress.md
+// Creates: snapshots/01_analyst.json
+// Updates: progress.md
 
-// Читаем конкретный снапшот
+// Read a specific snapshot
 const snapshot = await bible.getSnapshot(1)
 
-// Сжимаем при failover на слабую модель
+// Compress on failover to a weaker model
 const compressed = await bible.compress({
   targetTokens: 2000,
   strategy: 'facts-only'
 })
-// Возвращает строку для передачи в следующий агент
+// Returns a string to hand off to the next agent
 ```
 
-## Контракт агента
+## Agent contract
 
-Каждый агент в пайплайне обязан:
+Every agent in the pipeline must:
 
-1. **Перед работой** — прочитать Библию: `bible.read()`
-2. **После работы** — обновить Библию: `bible.update(step, result)`
+1. **Before working** — read the Bible: `bible.read()`
+2. **After working** — update the Bible: `bible.update(step, result)`
 
-Это не опционально. Это часть контракта агента.
+This is not optional. It's part of the agent contract.
 
 ```typescript
-// Пример агента
+// Example agent
 async function analystAgent(task: string) {
   const bible = new Bible({ path: '.kitana' })
-  
-  // 1. Читаем контекст
+
+  // 1. Read context
   const context = await bible.read()
-  
-  // 2. Строим промпт с контекстом
+
+  // 2. Build a prompt with context
   const prompt = `
     Mission: ${context.mission}
     Previous progress: ${context.progress}
-    
+
     Your task: ${task}
   `
-  
-  // 3. Делаем запрос
+
+  // 3. Make the request
   const result = await router.complete({ messages: [{ role: 'user', content: prompt }] })
-  
-  // 4. Обязательно обновляем Библию
+
+  // 4. Must update the Bible
   await bible.update({
     step: 'analyst',
     stepIndex: 1,
@@ -139,40 +139,40 @@ async function analystAgent(task: string) {
     tokensUsed: result.usage.total_tokens,
     provider: result.model
   })
-  
+
   return result
 }
 ```
 
 ## Compressor
 
-При failover на более слабую модель (меньший контекст) — сжимаем Библию.
+On failover to a weaker model (smaller context) — compress the Bible.
 
 ```typescript
 const compressed = await bible.compress({
-  targetTokens: 2000,    // влезть в контекст слабой модели
-  strategy: 'facts-only' // убираем воду, оставляем факты
+  targetTokens: 2000,    // fit inside the weaker model's context
+  strategy: 'facts-only' // strip filler, keep facts
 })
 ```
 
-Стратегии:
-- `facts-only` — только конкретные факты, числа, решения
-- `summary` — короткое саммари каждого шага
-- `last-n` — только последние N шагов
+Strategies:
+- `facts-only` — only concrete facts, numbers, decisions
+- `summary` — a short summary of each step
+- `last-n` — only the last N steps
 
-Алгоритм:
-1. Читает все снапшоты и progress.md
-2. Отправляет в модель с промптом "сожми до N токенов"
-3. Возвращает dense string для передачи в агент
-4. Сжатие ~60-70% без потери ключевых фактов
+Algorithm:
+1. Reads all snapshots and progress.md
+2. Sends them to the model with a "compress to N tokens" prompt
+3. Returns a dense string to hand off to the agent
+4. ~60-70% compression without losing key facts
 
-## Файловая структура пакета
+## Package file structure
 
 ```
 packages/bible/src/
 ├── index.ts
-├── Bible.ts          — основной класс
-├── compressor.ts     — логика сжатия
-├── formats.ts        — форматы mission.md и progress.md
+├── Bible.ts          — main class
+├── compressor.ts      — compression logic
+├── formats.ts          — mission.md and progress.md formats
 └── types.ts
 ```

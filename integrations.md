@@ -2,7 +2,7 @@
 
 ## n8n
 
-### Схема
+### Flow
 ```
 n8n HTTP Request node
         ↓
@@ -13,13 +13,13 @@ http://localhost:4141/v1/chat/completions
 claude -p
 ```
 
-### Настройка в n8n
+### Setup in n8n
 
 HTTP Request node:
 - Method: POST
 - URL: `http://localhost:4141/v1/chat/completions`
 - Headers: `Content-Type: application/json`
-- Body:
+- Body (must use raw/JSON mode, not the key-value "Body Parameters" builder — see note below):
 ```json
 {
   "model": "auto",
@@ -29,30 +29,34 @@ HTTP Request node:
 }
 ```
 
-### Через ngrok (внешний доступ)
+**Body mode gotcha (found during testing):** in n8n's HTTP Request node, the Body section must be switched to **raw JSON** mode with the object above pasted directly. If you instead add a field named `messages` under the key-value "Body Parameters" builder, n8n wraps your JSON as `{"messages": "<the whole JSON string>"}` — a string, not an array — and the server correctly rejects it with `400`.
+
+**Running n8n in Docker:** if n8n runs in a container and Kitana runs on the host, use `http://host.docker.internal:4141/...` instead of `localhost` — the container can't otherwise reach the host's loopback interface. Verified working: `docker run -d --name kitana-n8n -p 5678:5678 -v kitana_n8n_data:/home/node/.n8n docker.n8n.io/n8nio/n8n`.
+
+### Via ngrok (external access)
 
 ```bash
 ngrok http 4141
-# Получаем: https://abc123.ngrok.io
+# Get: https://abc123.ngrok.io
 ```
 
-Используем ngrok URL вместо localhost — для внешних webhook, cron, n8n на другом сервере.
+Use the ngrok URL instead of localhost — for external webhooks, cron, or n8n running on another server.
 
-Для стабильного URL нужен платный план ngrok (~$10/мес) или Cloudflare Tunnel (бесплатно).
+A stable URL needs a paid ngrok plan (~$10/mo) or Cloudflare Tunnel (free).
 
-### Cloudflare Tunnel (альтернатива ngrok)
+### Cloudflare Tunnel (ngrok alternative)
 
 ```bash
 cloudflared tunnel --url http://localhost:4141
 ```
 
-Бесплатно, стабильный URL, без ограничений на трафик.
+Free, stable URL, no traffic limits.
 
 ---
 
 ## OpenClaw
 
-### Схема
+### Flow
 
 ```
 OpenClaw
@@ -68,7 +72,7 @@ claude -p
 
 ### openclaw.json
 
-Реальная схема конфига (проверено на живом OpenClaw 2026.7.1-2, `~/.openclaw/openclaw.json`). Отличия от ранней черновой версии: `"api"` — `"openai-completions"`, а не `"openai"`; `baseUrl` включает `/v1`; каждая модель требует полные метаданные (`cost`, `contextWindow`, `maxTokens`), иначе применяются дефолты.
+The real config schema (verified against a live OpenClaw 2026.7.1-2 install, `~/.openclaw/openclaw.json`). Differences from an earlier draft version: `"api"` is `"openai-completions"`, not `"openai"`; `baseUrl` includes `/v1`; each model needs full metadata (`cost`, `contextWindow`, `maxTokens`), otherwise defaults are applied.
 
 ```json
 {
@@ -105,31 +109,31 @@ claude -p
 }
 ```
 
-Проверка (реальный тест):
+Verification (real test):
 ```bash
 openclaw config validate
 openclaw agent --local --model "kitana/auto" --session-key "agent:main:kitana-test" --message "say PONG" --json
 ```
-Ожидаем `"text":"PONG"`, `winnerProvider:"kitana"`, `fallbackUsed:false` в ответе.
+Expect `"text":"PONG"`, `winnerProvider:"kitana"`, `fallbackUsed:false` in the response.
 
-### Почему это легально
+### Why this is legal
 
-Anthropic заблокировал OAuth через браузер (что делал OpenClaw раньше). Kitana использует `claude -p` — официальный programmatic режим Claude Code CLI. Это разные механизмы. `claude -p` Anthropic не блокировал и вряд ли будет — это их собственный продукт для автоматизации.
+Anthropic blocked browser-based OAuth (which OpenClaw used to do). Kitana uses `claude -p` — the official programmatic mode of the Claude Code CLI. That's a different mechanism. Anthropic hasn't blocked `claude -p` and is unlikely to — it's their own product, built for automation.
 
-### Security преимущество
+### Security advantage
 
-Kitana как прослойка защищает от безумных инструкций которые OpenClaw может передавать:
-- Фильтруем prompt injection
-- Rate limiting — OpenClaw не сожжёт все лимиты подписки
-- Whitelist моделей — OpenClaw не может запросить что попало
+Kitana as a middle layer protects against reckless instructions OpenClaw might pass through:
+- Filters prompt injection
+- Rate limiting — OpenClaw can't burn through the whole subscription's limits
+- Model whitelist — OpenClaw can't request just anything
 
 ---
 
 ## VSCode Extension
 
-Статус: later
+Status: later
 
-Kitana сервер совместим с любым VSCode расширением которое поддерживает OpenAI-совместимый endpoint. Например Continue.dev:
+The Kitana server is compatible with any VSCode extension that supports an OpenAI-compatible endpoint. For example, Continue.dev:
 
 ```json
 // .continue/config.json
@@ -147,9 +151,9 @@ Kitana сервер совместим с любым VSCode расширение
 
 ## MCP Server
 
-Статус: later
+Status: later
 
-Kitana может экспонироваться как MCP сервер для Claude Desktop и других MCP клиентов.
+Kitana can be exposed as an MCP server for Claude Desktop and other MCP clients.
 
 ```json
 // claude_desktop_config.json
@@ -167,7 +171,7 @@ Kitana может экспонироваться как MCP сервер для 
 
 ## Vercel AI SDK
 
-Прямая интеграция без HTTP сервера:
+Direct integration, no HTTP server needed:
 
 ```typescript
 import { kitana } from '@kitana-sdk/core'
@@ -188,26 +192,26 @@ const { textStream } = await streamText({
 
 ---
 
-## Примеры use cases
+## Example use cases
 
-### n8n + Kitana — автоматизация без API ключей
+### n8n + Kitana — automation without API keys
 
-1. Пользователь платит $20/мес за Claude Max
-2. Ставит Kitana сервер локально
-3. n8n стучит в localhost:4141
-4. Claude отвечает через подписку
-5. API токены не тратятся
+1. The user pays $20/mo for Claude Max
+2. Runs the Kitana server locally
+3. n8n calls localhost:4141
+4. Claude responds through the subscription
+5. No API tokens are spent
 
-### OpenClaw + Kitana — безопасный локальный агент
+### OpenClaw + Kitana — a safe local agent
 
-1. OpenClaw использует Kitana как провайдер
-2. Kitana фильтрует входящие запросы
-3. Пользователь контролирует что проходит к модели
+1. OpenClaw uses Kitana as a provider
+2. Kitana filters incoming requests
+3. The user controls what reaches the model
 
-### Агентный пайплайн с Библией
+### Agentic pipeline with the Bible
 
-1. Запускаем пайплайн из 5 агентов
-2. Каждый агент читает и обновляет Библию
-3. На шаге 3 Claude перегружен — failover на Ollama
-4. Библия сжимается под контекст Ollama
-5. Пайплайн продолжается без потери данных
+1. Run a 5-agent pipeline
+2. Each agent reads and updates the Bible
+3. At step 3, Claude is overloaded — failover to Ollama
+4. The Bible compresses to fit Ollama's context
+5. The pipeline continues without losing data

@@ -2,14 +2,14 @@
 
 ## Claude CLI
 
-### Что доказано POC
+### What the POC proved
 
 ```bash
-# Работает программно
+# Works programmatically
 claude -p "reply with only PONG" --output-format json
 ```
 
-Ответ:
+Response:
 ```json
 {
   "type": "result",
@@ -38,7 +38,7 @@ claude -p "reply with only PONG" --output-format json
 claude auth status
 ```
 
-Возвращает JSON:
+Returns JSON:
 ```json
 {
   "loggedIn": true,
@@ -49,7 +49,7 @@ claude auth status
 }
 ```
 
-subscriptionType варианты: `"max"`, `"enterprise"`, `"pro"`, `null`
+subscriptionType values: `"max"`, `"enterprise"`, `"pro"`, `null`
 
 ### Version detection
 
@@ -58,9 +58,9 @@ claude --version
 # 2.1.195 (Claude Code)
 ```
 
-### Доступные модели
+### Available models
 
-Claude CLI не отдаёт список моделей динамически. Хардкодим известные:
+The Claude CLI doesn't return a model list dynamically. We hardcode the known ones:
 
 ```typescript
 export const CLAUDE_MODELS = [
@@ -70,44 +70,47 @@ export const CLAUDE_MODELS = [
   'claude-opus-4-5',
 ] as const
 
-// Алиасы которые принимает --model флаг
+// Aliases accepted by the --model flag
 export const CLAUDE_ALIASES = ['sonnet', 'opus', 'haiku', 'fable']
 ```
 
-Реальную модель которая была использована берём из `modelUsage` в ответе.
+The real model that was actually used is read from `modelUsage` in the response.
 
-### Флаги
+### Flags
 
 ```bash
-claude -p "prompt"                     # базовый вызов
-claude -p "prompt" --output-format json  # JSON ответ
-claude -p "prompt" --model sonnet        # конкретная модель
-claude -p "prompt" --model claude-sonnet-4-6  # полное имя
-claude -p "prompt" --max-budget-usd 0.01    # лимит бюджета
+claude -p "prompt"                     # basic call
+claude -p "prompt" --output-format json  # JSON response
+claude -p "prompt" --model sonnet        # specific model
+claude -p "prompt" --model claude-sonnet-4-6  # full name
+claude -p "prompt" --max-budget-usd 0.01    # budget cap
 ```
 
-### Важные детали
+### Important details
 
-- `-p` = `--print` — non-interactive режим, обязателен для программного вызова
-- Без `-p` Claude открывает интерактивную сессию, процесс не завершается
-- `--output-format json` возвращает полную метаинформацию включая токены и стоимость
-- Timeout рекомендуем 30000ms (30 сек)
-- code 143 = SIGTERM — команда не существует, CLI открыл интерактивный режим и мы его убили
+- `-p` = `--print` — non-interactive mode, required for programmatic calls
+- Without `-p`, Claude opens an interactive session and the process never exits
+- `--output-format json` returns full metadata including tokens and cost
+- Recommended timeout: 30000ms (30s)
+- exit code 143 = SIGTERM — the command doesn't exist, the CLI opened an interactive session and we killed it
 
-### Вызов через child_process
+### Invocation via child_process
+
+**Important, learned the hard way (see Stage 4):** pass the prompt via **stdin**, not as a positional CLI argument. A multi-line prompt passed as a positional argument gets silently mangled on Windows — `cmd.exe` treats embedded newlines as command separators even inside quotes, truncating or emptying the argument. `claude -p` (with no positional prompt) reads the prompt from stdin — this is documented, supported CLI behavior, not a workaround.
 
 ```typescript
 import { spawnSync } from 'child_process'
 
 function callClaude(prompt: string, model?: string) {
-  const args = ['-p', prompt, '--output-format', 'json']
+  const args = ['-p', '--output-format', 'json']
   if (model && model !== 'auto') {
     args.push('--model', model)
   }
 
   const result = spawnSync('claude', args, {
     encoding: 'utf8',
-    timeout: 30000
+    timeout: 30000,
+    input: prompt
   })
 
   if (result.status !== 0 || result.signal) {
@@ -118,6 +121,10 @@ function callClaude(prompt: string, model?: string) {
 }
 ```
 
+On Windows, `spawnSync('claude', ...)` also needs `shell: true` to resolve the `.cmd` shim — see `@kitana-sdk/core/src/platform.ts` for the actual implementation, including safe argument quoting (only quote arguments that contain spaces/quotes, not the bare command name, which can otherwise break `cmd.exe`'s PATH resolution).
+
+For a system prompt (e.g. compressed Bible context on failover), use `--append-system-prompt-file <path>` with a temp file instead of embedding it in the prompt text — see `bible.md` for why that distinction matters.
+
 ---
 
 ## Ollama
@@ -126,11 +133,11 @@ function callClaude(prompt: string, model?: string) {
 
 ```typescript
 async function detectOllama() {
-  // 1. Проверяем бинарник
+  // 1. Check the binary
   const binary = spawnSync('which', ['ollama'], { encoding: 'utf8' })
   const available = binary.status === 0
 
-  // 2. Проверяем запущен ли сервер
+  // 2. Check whether the server is running
   let running = false
   let models: string[] = []
 
@@ -149,9 +156,9 @@ async function detectOllama() {
 }
 ```
 
-### Вызов
+### Invocation
 
-Ollama поднимает OpenAI-совместимый сервер на порту 11434.
+Ollama exposes an OpenAI-compatible server on port 11434.
 
 ```typescript
 async function callOllama(messages: Message[], model: string) {
@@ -168,46 +175,46 @@ async function callOllama(messages: Message[], model: string) {
 
 ## Codex CLI (OpenAI)
 
-Статус: planned. Аналог Claude CLI от OpenAI.
+Status: planned. OpenAI's equivalent of the Claude CLI.
 
 ```bash
-codex -p "prompt"   # предположительно
+codex -p "prompt"   # presumably
 ```
 
-Детектируем через `which codex`. API формат уточняем когда добавляем.
+Detected via `which codex`. API format to be confirmed once added.
 
 ---
 
 ## Gemini CLI
 
-Статус: planned. Экспериментально.
+Status: planned. Experimental.
 
 ```bash
-gemini -p "prompt"  # предположительно
+gemini -p "prompt"  # presumably
 ```
 
 ---
 
 ## API Keys (fallback)
 
-Когда все CLI провайдеры недоступны — fallback на прямой API.
+When every CLI provider is unavailable — fall back to the direct API.
 
 ```typescript
-// Используем официальные SDK как fallback
+// Use the official SDKs as a fallback
 import Anthropic from '@anthropic-ai/sdk'
 import OpenAI from 'openai'
 ```
 
-Это prod режим. Для dev используем CLI провайдеры.
+This is the prod-mode path. For dev, we use the CLI providers.
 
 ---
 
 ## HTTP Servers
 
-Порты которые проверяем:
+Ports we probe:
 
-| Сервис | Порт | Endpoint |
-|--------|------|----------|
+| Service | Port | Endpoint |
+|---------|------|----------|
 | Ollama | 11434 | GET /api/tags |
 | LM Studio | 1234 | GET / |
 | LocalAI | 8080 | GET / |

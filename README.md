@@ -1,66 +1,72 @@
 # Kitana SDK
 
-Open-source TypeScript SDK для программного использования AI подписок без API ключей.
+Open-source TypeScript SDK for using AI subscriptions programmatically, without API keys.
 
-## Что это
+## What is this
 
-Вместо того чтобы платить за API токены — используем уже оплаченные подписки (Claude Max, ChatGPT Plus, Gemini) программно через их CLI инструменты.
+Instead of paying for API tokens — use subscriptions you already pay for (Claude Max, ChatGPT Plus, Gemini) programmatically through their CLI tools.
 
-**Реальная экономия:** $5/день на API vs $0 через Claude CLI подписку.
+**Real savings:** $5/day on API calls vs $0 through a Claude CLI subscription.
 
-## Три killer features
+## Three killer features
 
-**1. Роутинг без API ключей**
-Claude Max подписка → `claude -p` → ответ. Никаких ключей, никаких токенов.
+**1. Routing without API keys**
+Claude Max subscription → `claude -p` → response. No keys, no tokens.
 
 **2. Security layer**
-Kitana стоит между клиентом и моделью. Фильтрует prompt injection, rate limiting, whitelist моделей.
+Kitana sits between the client and the model. Filters prompt injection, rate limiting, model whitelisting.
 
-**3. Библия проекта**
-Персистентный контекст агентного пайплайна. Агент упал на шаге 2 — перезапускаем с шага 2, не с начала. Модель переключилась — контекст сжимается и передаётся дальше.
+**3. Project Bible**
+Persistent context for agentic pipelines. An agent crashes at step 2 — restart from step 2, not from scratch. The model switches — context gets compressed and carried forward.
 
-## Два продукта
+## Two products
 
-`@kitana-sdk` — npm пакет для разработчиков. Встраивают в свои продукты.
+`@kitana-sdk` — an npm package for developers. Embedded into their own products.
 
-**Kitana App** — нативный десктоп (Electron + Next.js). macOS / Windows / Linux. Интерфейс вокруг терминалок со всеми фичами SDK.
+**Kitana App** — a native desktop app (Electron + Next.js). macOS / Windows / Linux. A UI wrapped around the terminal tools with all the SDK's features.
 
-## Пакеты
+## Packages
 
-| Пакет | Что делает |
-|-------|-----------|
+| Package | What it does |
+|---------|---------------|
 | `@kitana-sdk/core` | detector, router, Vercel AI SDK adapter |
-| `@kitana-sdk/server` | OpenAI-совместимый HTTP сервер |
-| `@kitana-sdk/bible` | Библия проекта, compressor |
+| `@kitana-sdk/server` | OpenAI-compatible HTTP server |
+| `@kitana-sdk/bible` | project Bible, compressor |
 | `@kitana-sdk/tracker` | OTel middleware, cost calculator |
 | `@kitana-sdk/cli` | `kitana doctor`, `kitana report` |
 
-## Интеграции
+## Integrations
 
 - **n8n** — HTTP node → localhost:4141 → Kitana → Claude
-- **OpenClaw** — кастомный провайдер через openclaw.json
-- **VSCode Extension** — через MCP или OpenAI-совместимый endpoint
-- **MCP Server** — любой MCP совместимый клиент
+- **OpenClaw** — custom provider via openclaw.json
+- **VSCode Extension** — via MCP or an OpenAI-compatible endpoint
+- **MCP Server** — any MCP-compatible client
 
-## Стек
+## Stack
 
-- TypeScript везде
+- TypeScript everywhere
 - pnpm workspaces + Turborepo
 - Vercel AI SDK compatible
 - Electron + Next.js (desktop app)
 - SQLite + drizzle-orm (desktop)
 - OpenTelemetry (observability)
 
-## Статус
+## Status
 
-POC готов — `claude -p` работает программно, детекция CLI работает.
-Сейчас: Стадия 1 — минимальный HTTP сервер.
+- Stage 0 (POC) — done
+- Stage 1 (`@kitana-sdk/server`, minimal HTTP server) — done, verified end-to-end with n8n
+- Stage 3 (`@kitana-sdk/core`, router + failover + streaming) — done
+- Stage 4 (`@kitana-sdk/bible`, persistent pipeline context) — done
+- Stage 5 (OpenClaw integration) — done, verified against a real OpenClaw install
+- Stage 2 (ngrok + security), Stage 6 (tracker + CLI), Stage 7 (desktop app) — not started yet
 
-## Документация
+See `roadmap.md` for the full stage breakdown and current priority order.
 
-- `architecture.md` — все пакеты, структура монорепо
-- `stage-1.md` — текущая задача
-- `providers.md` — claude-p, ollama, форматы
-- `bible.md` — Библия проекта
+## Documentation
+
+- `architecture.md` — all packages, monorepo structure
+- `stage-1.md` — the original Stage 1 task spec
+- `providers.md` — claude -p, ollama, formats
+- `bible.md` — the project Bible
 - `integrations.md` — n8n, OpenClaw, MCP
-- `roadmap.md` — стадии и сроки
+- `roadmap.md` — stages and priorities

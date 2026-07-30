@@ -1,8 +1,16 @@
 {
   "name": "@kitana-sdk/bible",
   "version": "0.1.0",
+  "description": "Persistent context for agentic pipelines — resume after crashes, compress context on model failover.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ataztech910/kitana.git",
+    "directory": "packages/bible"
+  },
+  "keywords": ["claude", "ai", "llm", "agent", "pipeline", "persistence"],
   "publishConfig": {
     "access": "public"
   },

@@ -1,8 +1,16 @@
 {
   "name": "@kitana-sdk/server",
   "version": "0.1.0",
+  "description": "OpenAI-compatible HTTP server backed by your Claude subscription. No API keys.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ataztech910/kitana.git",
+    "directory": "packages/server"
+  },
+  "keywords": ["claude", "claude-code", "ai", "llm", "openai-compatible", "n8n", "openclaw"],
   "publishConfig": {
     "access": "public"
   },

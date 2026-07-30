@@ -1,29 +1,31 @@
-# Stage 1 — Минимальный HTTP сервер
+# Stage 1 — Minimal HTTP server
 
-## Цель
+*This is the original task spec, kept as a historical reference. The shipped implementation evolved beyond it — see `CHANGELOG.md` for what actually landed (stdin-based prompt passing, request validation, router integration in later stages, etc.).*
 
-Написать `@kitana-sdk/server` минимальную версию которая:
-1. Слушает `POST /v1/chat/completions`
-2. Принимает OpenAI формат запроса
-3. Вызывает `claude -p` через `child_process.spawnSync`
-4. Возвращает ответ в OpenAI формате
-5. Подключается к n8n без изменений
+## Goal
 
-## Проверка успеха
+Write a minimal version of `@kitana-sdk/server` that:
+1. Listens on `POST /v1/chat/completions`
+2. Accepts an OpenAI-format request
+3. Calls `claude -p` via `child_process.spawnSync`
+4. Returns the response in OpenAI format
+5. Connects to n8n with no changes needed
+
+## Success check
 
 ```bash
-# Запускаем
+# Start it
 npx ts-node packages/server/src/server.ts
 
-# Тестируем
+# Test it
 curl -X POST http://localhost:4141/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{"model":"auto","messages":[{"role":"user","content":"say PONG"}]}'
 
-# Ожидаем OpenAI-совместимый ответ с "PONG"
+# Expect an OpenAI-compatible response containing "PONG"
 ```
 
-## Файлы для создания
+## Files to create
 
 ```
 packages/server/
@@ -58,7 +60,7 @@ packages/server/
 }
 ```
 
-## claude.ts — вызов claude -p
+## claude.ts — calling claude -p
 
 ```typescript
 import { spawnSync } from 'child_process'
@@ -80,7 +82,7 @@ export interface ClaudeResponse {
 
 export function callClaude(prompt: string, model?: string): ClaudeResponse {
   const args = ['-p', prompt, '--output-format', 'json']
-  
+
   if (model && model !== 'auto') {
     args.push('--model', model)
   }
@@ -113,24 +115,24 @@ export async function handleCompletions(
   req: IncomingMessage,
   res: ServerResponse
 ) {
-  // Читаем body
+  // Read the body
   const body = await readBody(req)
   const { model, messages } = JSON.parse(body) as OpenAIRequest
 
-  // Собираем prompt из messages
+  // Build the prompt from messages
   const prompt = messages
     .map(m => `${m.role}: ${m.content}`)
     .join('\n')
 
-  // Вызываем Claude
+  // Call Claude
   const claudeRes = callClaude(prompt, model)
 
-  // Определяем модель из ответа
+  // Determine the model from the response
   const usedModel = claudeRes.modelUsage
     ? Object.keys(claudeRes.modelUsage).pop()
     : 'claude-sonnet-4-6'
 
-  // Формируем OpenAI-совместимый ответ
+  // Build the OpenAI-compatible response
   const response = {
     id: `chatcmpl-${Date.now()}`,
     object: 'chat.completion',
@@ -165,7 +167,7 @@ function readBody(req: IncomingMessage): Promise<string> {
 }
 ```
 
-## server.ts — основной файл
+## server.ts — main file
 
 ```typescript
 import { createServer } from 'http'
@@ -177,7 +179,7 @@ const server = createServer(async (req, res) => {
   const url = req.url || ''
   const method = req.method || ''
 
-  // CORS для локальной разработки
+  // CORS for local development
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
 
@@ -221,12 +223,12 @@ server.listen(PORT, () => {
 })
 ```
 
-## Что НЕ делаем в Stage 1
+## Out of scope for Stage 1
 
-- Нет streaming
-- Нет auth/api key validation
-- Нет rate limiting
-- Нет других провайдеров кроме Claude
-- Нет error handling кроме базового
+- No streaming
+- No auth/API key validation
+- No rate limiting
+- No providers besides Claude
+- No error handling beyond the basics
 
-Всё это добавляется в Stage 2 и 3.
+All of this gets added in Stage 2 and 3.

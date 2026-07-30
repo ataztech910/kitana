@@ -1,6 +1,6 @@
 # Architecture
 
-## Монорепо структура
+## Monorepo structure
 
 ```
 kitana-sdk/
@@ -17,12 +17,12 @@ kitana-sdk/
 └── turbo.json
 ```
 
-## Слои сверху вниз
+## Layers, top to bottom
 
 ```
 Kitana App (Electron)
         ↓
-Consumers (@kitana-sdk users: n8n, OpenClaw, VSCode, сторонние девы)
+Consumers (@kitana-sdk users: n8n, OpenClaw, VSCode, third-party devs)
         ↓
 @kitana-sdk/server (OpenAI-compatible HTTP gateway)
         ↓
@@ -30,24 +30,24 @@ Consumers (@kitana-sdk users: n8n, OpenClaw, VSCode, сторонние девы
         ↓
 Providers (Claude CLI, Ollama, Codex CLI, Gemini CLI, API keys)
         ↓
-@kitana-sdk/bible (персистентный контекст пайплайна)
+@kitana-sdk/bible (persistent pipeline context)
         ↓
 @kitana-sdk/tracker (observability, cost tracking)
 ```
 
 ## @kitana-sdk/core
 
-Три модуля:
+Three modules:
 
 ### detector
-Сканирует окружение. Что установлено, что запущено, авторизован ли пользователь.
+Scans the environment. What's installed, what's running, whether the user is authenticated.
 
 ```typescript
 import { detect } from '@kitana-sdk/core'
 const env = await detect()
 ```
 
-Возвращает:
+Returns:
 ```typescript
 {
   providers: {
@@ -77,16 +77,16 @@ const env = await detect()
 }
 ```
 
-Как детектит:
+How it detects:
 - `which claude` / `where claude` (Windows)
-- `claude auth status` → JSON в stdout
-- `claude --version` → парсим версию
-- GET `http://localhost:11434/api/tags` → ollama + список моделей
+- `claude auth status` → JSON on stdout
+- `claude --version` → parse the version
+- GET `http://localhost:11434/api/tags` → ollama + model list
 - GET `http://localhost:1234` → LM Studio
 
 ### router
 
-Failover chain между провайдерами.
+Failover chain across providers.
 
 ```typescript
 import { createRouter } from '@kitana-sdk/core'
@@ -104,11 +104,11 @@ const response = await router.complete({
 })
 ```
 
-Логика:
-1. Пробует первый провайдер в chain
-2. Если упал — переходит к следующему
-3. Если переключился на более слабую модель — вызывает `bible.compress()`
-4. Логирует каждое переключение
+Logic:
+1. Tries the first provider in the chain
+2. On failure, moves to the next one
+3. On switching to a weaker model, calls `bible.compress()`
+4. Logs every switch
 
 ### Vercel AI SDK adapter
 
@@ -122,11 +122,11 @@ const result = await generateText({
 })
 ```
 
-Имплементирует `LanguageModelV1` из `ai` пакета. Zero migration — меняешь только импорт провайдера.
+Implements `LanguageModelV1` from the `ai` package. Zero migration — you only change the provider import.
 
 ## @kitana-sdk/server
 
-OpenAI-совместимый HTTP сервер на localhost.
+OpenAI-compatible HTTP server on localhost.
 
 ```typescript
 import { createServer } from '@kitana-sdk/server'
@@ -145,12 +145,12 @@ await server.start()
 
 Endpoints:
 ```
-POST /v1/chat/completions   основной endpoint
-GET  /v1/models             список доступных моделей
-GET  /health                статус сервера и провайдеров
+POST /v1/chat/completions   main endpoint
+GET  /v1/models              list of available models
+GET  /health                 server and provider status
 ```
 
-Файловая структура:
+File structure:
 ```
 packages/server/src/
 ├── index.ts
@@ -165,7 +165,7 @@ packages/server/src/
 
 ## @kitana-sdk/bible
 
-См. `bible.md`
+See `bible.md`
 
 ## @kitana-sdk/tracker
 
@@ -178,7 +178,7 @@ const tracker = createTracker({
 })
 ```
 
-Каждая запись:
+Each entry:
 ```json
 {
   "timestamp": "2026-07-30T10:00:00Z",
@@ -219,7 +219,7 @@ apps/desktop/
 └── package.json
 ```
 
-## Монорепо setup
+## Monorepo setup
 
 ```bash
 mkdir kitana-sdk && cd kitana-sdk

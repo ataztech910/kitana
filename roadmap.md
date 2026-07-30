@@ -1,212 +1,214 @@
 # Roadmap
 
-## Условия
+## Constraints
 
-- Один разработчик
-- 3 часа в день среднем
-- Claude Code помогает писать код
-- Старт: конец июля 2026
-
----
-
-## Актуальный порядок выполнения (приоритеты пересмотрены после Стадии 1)
-
-Нумерация стадий ниже осталась исходной (для консистентности с видео-планом), но **порядок выполнения**:
-
-1. Стадия 1 — ✅ готово
-2. **Стадия 3** — Router + Failover (ядро ценности продукта, killer feature #1)
-3. Стадия 5 — OpenClaw интеграция
-4. Стадия 4 — Библия проекта
-5. Стадия 6 — Tracker + CLI
-6. **Стадия 2** — ngrok + Security (перенесена в конец — критична только когда сервер реально открывается наружу; для локальной работы не блокирует остальное)
-7. Стадия 7 — Kitana App
-8. Стадия 8 — DocLaunch bundle (без сроков)
+- One developer
+- ~3 hours/day on average
+- Claude Code helps write the code
+- Start: late July 2026
 
 ---
 
-## Стадии
+## Current execution order (priorities revisited after Stage 1)
 
-### Стадия 0 — POC ✅ ГОТОВО
+The stage numbering below stayed as originally assigned (for consistency with the content plan), but the **execution order** is:
 
-Что сделано:
-- `claude -p "prompt" --output-format json` работает программно
-- `claude auth status` возвращает JSON с типом подписки
-- Детекция CLI бинарников через `which` работает
-- HTTP ping серверов (Ollama, LM Studio) работает
-
----
-
-### Стадия 1 — Минимальный HTTP сервер
-**Срок: 1 неделя**
-
-Задача: `@kitana-sdk/server` минимальная версия
-
-Что делаем:
-- `POST /v1/chat/completions` → `claude -p` → OpenAI формат ответа
-- `GET /health` — статус
-- `GET /v1/models` — список моделей (хардкод)
-- n8n подключается и работает
-
-Что НЕ делаем:
-- Нет streaming
-- Нет auth
-- Нет rate limiting
-- Только Claude провайдер
-
-**Milestone:** снимаем первое видео "Claude без API ключа в n8n за 15 минут"
+1. Stage 1 — ✅ done
+2. **Stage 3** — Router + Failover (core product value, killer feature #1) — ✅ done
+3. Stage 5 — OpenClaw integration — ✅ done
+4. Stage 4 — Project Bible — ✅ done
+5. Stage 6 — Tracker + CLI — next
+6. **Stage 2** — ngrok + Security (moved to the end — only critical once the server is actually exposed publicly; doesn't block anything for local use)
+7. Stage 7 — Kitana App
+8. Stage 8 — DocLaunch bundle (no timeline)
 
 ---
 
-### Стадия 2 — ngrok + Security
-**Срок: 1 неделя**
+## Stages
 
-Задача: открыть сервер наружу и защитить его
+### Stage 0 — POC ✅ DONE
 
-Что делаем:
-- ngrok / Cloudflare Tunnel интеграция
+Done:
+- `claude -p "prompt" --output-format json` works programmatically
+- `claude auth status` returns JSON with the subscription type
+- CLI binary detection via `which` works
+- HTTP ping of local servers (Ollama, LM Studio) works
+
+---
+
+### Stage 1 — Minimal HTTP server ✅ DONE
+**Planned: 1 week**
+
+Task: a minimal `@kitana-sdk/server`
+
+Done:
+- `POST /v1/chat/completions` → `claude -p` → OpenAI-format response
+- `GET /health` — status
+- `GET /v1/models` — model list (hardcoded)
+- n8n connects and works (verified against a real n8n instance in Docker)
+
+Out of scope for this stage:
+- No streaming
+- No auth
+- No rate limiting
+- Claude-only provider
+
+**Milestone:** first video, "Claude without an API key in n8n in 15 minutes"
+
+---
+
+### Stage 2 — ngrok + Security
+**Planned: 1 week**
+
+Task: expose the server externally and secure it
+
+To do:
+- ngrok / Cloudflare Tunnel integration
 - Rate limiting (requests per minute per IP)
-- Базовая фильтрация prompt injection
-- Whitelist моделей
-- Логирование запросов
+- Basic prompt-injection filtering
+- Model whitelist
+- Request logging
 
-**Milestone:** видео "Открываю локальный AI в интернет безопасно"
+**Milestone:** video, "Exposing a local AI to the internet safely"
 
 ---
 
-### Стадия 3 — Router + Failover
-**Срок: 2 недели**
+### Stage 3 — Router + Failover ✅ DONE
+**Planned: 2 weeks**
 
-Задача: `@kitana-sdk/core` router
+Task: the `@kitana-sdk/core` router
 
-Что делаем:
+Done:
 - Failover chain: Claude → Ollama → API key
-- Прозрачное переключение (клиент не знает)
-- Детекция что провайдер недоступен
-- Логирование переключений
-- Базовый `detect()` API
+- Transparent switching (the client doesn't know)
+- Detects when a provider is unavailable
+- Logs every switch
+- Baseline `detect()` API
+- Real streaming (`claude -p --output-format stream-json`), wired into the server as OpenAI-compatible SSE
 
-**Milestone:** видео "Мой AI сам переключается между моделями"
-
----
-
-### Стадия 4 — Библия проекта
-**Срок: 3 недели**
-
-Задача: `@kitana-sdk/bible`
-
-Что делаем:
-- Структура `.kitana/bible/` на диске
-- `Bible.read()` и `Bible.update()`
-- `progress.md` автообновление
-- `snapshots/` сохранение результатов
-- `compressor.ts` — сжатие при failover
-- Интеграция с router (автовызов compress при переключении)
-
-**Milestone:** видео "Почему AI агент забывает всё и как починить"
+**Milestone:** video, "My AI switches models on its own when one goes down"
 
 ---
 
-### Стадия 5 — OpenClaw интеграция ✅ ГОТОВО
+### Stage 4 — Project Bible ✅ DONE
+**Planned: 3 weeks**
 
-Задача: Kitana как кастомный провайдер в OpenClaw
+Task: `@kitana-sdk/bible`
 
-Сделано:
-- Установлен OpenClaw (`npm install -g openclaw`), требует Node 22.22.3+/24.x — потребовалось обновить Node через nvm-windows (мешала отдельная неуправляемая установка Node в `C:\Program Files\nodejs`, пришлось удалить вручную через Настройки Windows)
-- Добавлен провайдер `kitana` в `~/.openclaw/openclaw.json` (`models.providers.kitana`, `api: "openai-completions"`, `baseUrl: "http://localhost:4141/v1"`) рядом с существующим `ollama`, без изменения default-модели
-- Реальная схема конфига оказалась чуть другой, чем в integrations.md (`"api": "openai-completions"`, не `"openai"`; нужен полный `models[]` с cost/contextWindow/maxTokens) — обновить integrations.md
-- `openclaw config validate` — конфиг валиден
-- Реальный тест: `openclaw agent --local --model kitana/auto --message "say PONG"` → `"text":"PONG"`, `winnerProvider:"kitana"`, `fallbackUsed:false`, корректно обработан полный системный промпт OpenClaw (~26KB: AGENTS.md/SOUL.md/tools/skills)
+Done:
+- `.kitana/bible/` on-disk structure
+- `Bible.read()` and `Bible.update()`
+- `progress.md` auto-updates
+- `snapshots/` result storage
+- `compressor.ts` — compression on failover
+- Router integration via an `onProviderSwitch` hook (compressed context handed to the next provider through each provider's real system-prompt channel, not embedded prompt text — see `bible.md`)
+- Vitest test suite (15 tests) across all packages
 
-Найденный и исправленный баг (реальная нагрузка от OpenClaw это выявила): большой системный промпт (~26KB) через позиционный CLI-аргумент вызывал `"Claude CLI error: The command line is too long."` на Windows — это было демонстрацией того, зачем нужен был стдин-фикс из Стадии 4, а не новый баг (сервер на момент теста снова оказался запущен со старой (pre-fix) веткой кода — после переключения на правильную ветку и рестарта сервера всё заработало)
-
-**Milestone:** видео "OpenClaw + Kitana — настройка за 20 минут"
-
----
-
-### Стадия 6 — Tracker + CLI
-**Срок: 2 недели**
-
-Задача: `@kitana-sdk/tracker` и `@kitana-sdk/cli`
-
-Что делаем:
-- Логирование каждого запроса в `.kitana/usage.jsonl`
-- Подсчёт реальной экономии
-- `kitana doctor` — красивый terminal output
-- `kitana report` — таблица по провайдерам
-- `kitana report --watch` — live режим
-
-**Milestone:** видео "Сколько я сэкономил за месяц — реальные цифры"
+**Milestone:** video, "Why AI agents forget everything, and how to fix it"
 
 ---
 
-### Стадия 7 — Kitana App v0.1
-**Срок: после MVP**
+### Stage 5 — OpenClaw integration ✅ DONE
 
-Задача: Electron + Next.js десктоп приложение
+Task: Kitana as a custom provider in OpenClaw
 
-Что делаем:
-- Electron shell вокруг Next.js
-- Terminal UI — интерфейс вокруг терминалок
-- Библия проекта — визуальный редактор
-- Model Router UI — включить/выключить провайдеры
-- Cost Report — дашборд экономии
-- macOS / Windows / Linux сборки
+Done:
+- Installed OpenClaw (`npm install -g openclaw`), requires Node 22.22.3+/24.x — had to upgrade Node via nvm-windows (blocked by a separate, unmanaged Node install at `C:\Program Files\nodejs`, had to be removed manually via Windows Settings)
+- Added a `kitana` provider to `~/.openclaw/openclaw.json` (`models.providers.kitana`, `api: "openai-completions"`, `baseUrl: "http://localhost:4141/v1"`) alongside the existing `ollama` one, without changing the default model
+- The real config schema turned out slightly different from the draft in integrations.md (`"api": "openai-completions"`, not `"openai"`; needs a full `models[]` with cost/contextWindow/maxTokens) — integrations.md has been updated
+- `openclaw config validate` — config is valid
+- Real test: `openclaw agent --local --model kitana/auto --message "say PONG"` → `"text":"PONG"`, `winnerProvider:"kitana"`, `fallbackUsed:false`, correctly handled OpenClaw's full system prompt (~26KB: AGENTS.md/SOUL.md/tools/skills)
 
----
+Bug found and fixed (surfaced by real load from OpenClaw): a large system prompt (~26KB) passed as a positional CLI argument triggered `"Claude CLI error: The command line is too long."` on Windows — this demonstrated exactly why the stdin fix from Stage 4 was needed, not a new bug (the running server happened to still be on the old, pre-fix branch at test time — after switching to the right branch and restarting the server, everything worked)
 
-### Стадия 8 — DocLaunch bundle (идея, не спланирована по срокам)
-
-Задача: упаковать Kitana + n8n как готовый Docker-бандл, устанавливаемый одним кликом через соседний проект **DocLaunch** (`d:/branches/dk` или где лежит — App Store для Docker-приложений на десктопе, см. его `CLAUDE.md`).
-
-Идея:
-- `n8n` — полностью в контейнере (уже проверено в Стадии 1 — работает через `host.docker.internal`)
-- `kitana-server` — либо в контейнере с volume-mount хостовой сессии `claude auth` (реалистично, так как DocLaunch работает локально на машине пользователя, а не на удалённом сервере), либо остаётся нативным процессом на хосте, если монтирование конфига окажется хрупким
-- Результат — `.doclaunch` файл/иконка, которая разворачивает n8n + Kitana одним кликом без терминала
-
-Статус: техническая осуществимость подтверждена (см. обсуждение), но не запланирована по срокам — рассматривать после того как оба проекта (Kitana MVP и DocLaunch MVP) достигнут собственных милстоунов.
+**Milestone:** video, "OpenClaw + Kitana — set up in 20 minutes"
 
 ---
 
-## Итого
+### Stage 6 — Tracker + CLI
+**Planned: 2 weeks**
 
-| Стадия | Срок | Накопленно |
-|--------|------|-----------|
-| 0 | готово | готово |
-| 1 | 1 нед | 1 нед |
-| 2 | 1 нед | 2 нед |
-| 3 | 2 нед | 4 нед |
-| 4 | 3 нед | 7 нед |
-| 5 | 1 нед | 8 нед |
-| 6 | 2 нед | 10 нед |
-| 7 | TBD | после MVP |
+Task: `@kitana-sdk/tracker` and `@kitana-sdk/cli`
 
-**MVP готов: ~середина октября 2026**
+To do:
+- Log every request to `.kitana/usage.jsonl`
+- Calculate real savings
+- `kitana doctor` — nice terminal output
+- `kitana report` — a per-provider table
+- `kitana report --watch` — live mode
 
----
-
-## Контент план параллельно
-
-Каждая стадия = одно видео для инсты/YouTube:
-
-1. "Claude без API ключа в n8n — $0 вместо $5/день"
-2. "Открываю локальный AI в интернет безопасно"
-3. "AI сам переключается между моделями когда одна падает"
-4. "Почему AI агент забывает всё после перезапуска"
-5. "OpenClaw + своя модель за 20 минут"
-6. "Сколько я сэкономил за месяц — реальные цифры"
-
-Плюс еженедельный пост "что я строю" — дневник разработки.
+**Milestone:** video, "How much I saved this month — real numbers"
 
 ---
 
-## Монетизация
+### Stage 7 — Kitana App v0.1
+**Planned: after MVP**
 
-**Короткий срок (во время разработки):**
-- Контент → аудитория → воркшопы для бизнеса
-- n8n + Kitana воркшоп: "AI автоматизация без API ключей"
+Task: an Electron + Next.js desktop app
 
-**После MVP:**
-- `@kitana-sdk` — open source, бесплатно
-- Kitana App — freemium или одноразовая покупка
-- Курсы: "Вайбкодер SaaS стек" (DO + Supabase + n8n + Kitana + Stripe)
-- Агенты по подписке на базе Kitana инфраструктуры
+To do:
+- Electron shell around Next.js
+- Terminal UI — an interface wrapped around the terminal tools
+- Project Bible — visual editor
+- Model Router UI — toggle providers on/off
+- Cost Report — a savings dashboard
+- macOS / Windows / Linux builds
+
+---
+
+### Stage 8 — DocLaunch bundle (idea, no timeline yet)
+
+Task: package Kitana + n8n as a one-click Docker bundle, deployable through the sibling project **DocLaunch** (an App Store for Docker apps on the desktop — see its own `CLAUDE.md`).
+
+Idea:
+- `n8n` — fully containerized (already verified in Stage 1 — works via `host.docker.internal`)
+- `kitana-server` — either containerized with a volume-mounted host `claude auth` session (realistic since DocLaunch runs locally on the user's own machine, not a remote server), or left as a native host process if mounting the config turns out to be fragile
+- Result — a `.doclaunch` file/icon that spins up n8n + Kitana in one click, no terminal
+
+Status: technically feasible (see prior discussion), but not scheduled — revisit once both projects (Kitana MVP and DocLaunch MVP) hit their own milestones.
+
+---
+
+## Summary
+
+| Stage | Planned | Cumulative |
+|-------|---------|-----------|
+| 0 | done | done |
+| 1 | 1 wk | 1 wk |
+| 2 | 1 wk | 2 wk |
+| 3 | 2 wk | 4 wk |
+| 4 | 3 wk | 7 wk |
+| 5 | 1 wk | 8 wk |
+| 6 | 2 wk | 10 wk |
+| 7 | TBD | after MVP |
+
+**MVP target: ~mid-October 2026**
+
+---
+
+## Parallel content plan
+
+Each stage = one video for Instagram/YouTube:
+
+1. "Claude without an API key in n8n — $0 instead of $5/day"
+2. "Exposing a local AI to the internet safely"
+3. "AI switches models on its own when one goes down"
+4. "Why AI agents forget everything after a restart"
+5. "OpenClaw + your own model in 20 minutes"
+6. "How much I saved this month — real numbers"
+
+Plus a weekly "what I'm building" post — a dev diary.
+
+---
+
+## Monetization
+
+**Short term (while building):**
+- Content → audience → workshops for businesses
+- n8n + Kitana workshop: "AI automation without API keys"
+
+**After MVP:**
+- `@kitana-sdk` — open source, free
+- Kitana App — freemium or a one-time purchase
+- Courses: "The vibe-coder SaaS stack" (DO + Supabase + n8n + Kitana + Stripe)
+- Subscription agents built on Kitana infrastructure
