@@ -68,23 +68,49 @@ claude -p
 
 ### openclaw.json
 
+Реальная схема конфига (проверено на живом OpenClaw 2026.7.1-2, `~/.openclaw/openclaw.json`). Отличия от ранней черновой версии: `"api"` — `"openai-completions"`, а не `"openai"`; `baseUrl` включает `/v1`; каждая модель требует полные метаданные (`cost`, `contextWindow`, `maxTokens`), иначе применяются дефолты.
+
 ```json
 {
   "models": {
+    "mode": "merge",
     "providers": {
       "kitana": {
-        "baseUrl": "http://localhost:4141",
+        "api": "openai-completions",
         "apiKey": "local",
-        "api": "openai",
+        "baseUrl": "http://localhost:4141/v1",
         "models": [
-          { "id": "auto", "name": "Kitana Auto" },
-          { "id": "claude-sonnet-4-6", "name": "Claude Sonnet" }
+          {
+            "id": "auto",
+            "name": "Kitana Auto",
+            "reasoning": false,
+            "input": ["text"],
+            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
+            "contextWindow": 200000,
+            "maxTokens": 8192
+          },
+          {
+            "id": "claude-sonnet-4-6",
+            "name": "Kitana Claude Sonnet",
+            "reasoning": false,
+            "input": ["text"],
+            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
+            "contextWindow": 200000,
+            "maxTokens": 8192
+          }
         ]
       }
     }
   }
 }
 ```
+
+Проверка (реальный тест):
+```bash
+openclaw config validate
+openclaw agent --local --model "kitana/auto" --session-key "agent:main:kitana-test" --message "say PONG" --json
+```
+Ожидаем `"text":"PONG"`, `winnerProvider:"kitana"`, `fallbackUsed:false` в ответе.
 
 ### Почему это легально
 

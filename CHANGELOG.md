@@ -35,3 +35,54 @@
 - Streaming responses
 - Request queue / concurrency control (BullMQ candidate for a later stage)
 - Auth, rate limiting, other providers besides Claude
+
+## Stage 3 — Router + Failover (@kitana-sdk/core)
+
+### Added
+
+- `@kitana-sdk/core` package: `detect()`, `createRouter()`, provider modules for Claude/Ollama/Anthropic-API/OpenAI-API
+- `detect()` — environment detection (Claude install/auth/version, Ollama install/running/models, LM Studio ping)
+- `createRouter({ chain, apiKeys })` — tries providers in order, falls back on failure, logs every switch
+- API-key fallback provider supporting both Anthropic (`@anthropic-ai/sdk`) and OpenAI (`openai`) SDKs, chosen by whichever key is configured
+- Real streaming: `streamClaude()` using `claude -p --output-format stream-json --include-partial-messages`, wired into `@kitana-sdk/server`'s `/v1/chat/completions` as OpenAI-compatible SSE when `stream: true`
+- `@kitana-sdk/server` now delegates to `router.complete()` instead of calling Claude directly; duplicate provider code removed from `server`, now lives once in `core`
+
+### Fixed
+
+- Same Windows shell-quoting logic duplicated between `server` and the new `core` package — consolidated into `core/src/platform.ts` (`run()`, `spawnAsync()`, `isBinaryAvailable()`)
+- Quoting the bare command name (e.g. `"claude"`) sometimes broke `cmd.exe`'s PATH resolution on Windows — now only arguments containing spaces/quotes are quoted, not the command itself
+
+### Verified
+
+- `detect()` correctly reports Claude (installed/logged in/subscription/version) and Ollama (installed/running) on a real machine
+- Failover: chain `['ollama','claude']` with Ollama down correctly falls back and returns a real Claude response
+- API-key fallback verified with both a missing-key graceful error and a real OpenAI key (revoked immediately after the test)
+- Streaming verified via `curl -N` — multiple incremental SSE chunks, correct `finish_reason` and `[DONE]`
+
+## Stage 4 — Bible (@kitana-sdk/bible)
+
+### Added
+
+- `@kitana-sdk/bible` package: `Bible` class (`read()`, `update()`, `getSnapshot()`, `compress()`), `progress.md`/`mission.md` formats, `compressor.ts`
+- Compress strategies: `last-n` (mechanical, no model call), `facts-only` and `summary` (via `router.complete()`)
+- `RouterConfig.onProviderSwitch` hook in `@kitana-sdk/core` — lets callers (like Bible) inject context on provider fallback, without `core` depending on `bible`
+- Vitest test suite across all packages (`pnpm test`) — 15 tests covering formats round-trip, Bible persistence/recovery, router edge cases, and server request validation
+
+### Fixed
+
+- **Critical**: a multi-line prompt passed as a positional CLI argument to `claude -p` silently got mangled on Windows (`cmd.exe` treats embedded newlines as command separators even inside quotes) → `callClaude()`/`streamClaude()` now send the prompt via **stdin** instead of argv (confirmed as documented, supported CLI behavior, not a workaround)
+- **Architectural**: the first `onProviderSwitch` implementation injected compressed context by prepending a fake `system:`-labeled block into the flattened prompt text — Claude correctly identified this as a prompt-injection attempt and refused to use it (the same defense Kitana's own security layer is meant to provide, working against Kitana itself). Fixed by passing context through each provider's real trusted channel instead: `--append-system-prompt-file` for the Claude CLI, the `system` field for the Anthropic/OpenAI SDKs, and a real `system`-role message for Ollama's OpenAI-compatible endpoint
+
+### Verified
+
+- Bible persistence across separate process instances (no shared in-memory state)
+- Pipeline crash recovery: completed steps are never re-run, only the failed step retries
+- `compress()` with `last-n` (mechanical) and `facts-only`/`summary` (real model call) — model call verified to correctly compress 3 steps into a dense fact summary
+- Router + Bible integration: compressed context correctly delivered via system prompt and used by Claude to answer a fact-retrieval question correctly ("Купи слона")
+- Full 3-agent pipeline (analyst → copywriter → reviewer) run end-to-end with real router calls, correct `progress.md`/snapshot output on disk
+
+### Not in scope for this stage
+
+- UI for the Bible (Stage 7, Kitana App)
+- Automatic `mission.md` creation/editing — manual-only by contract
+- Automated tests for real model-calling paths (`callClaude`, `streamClaude`, `facts-only`/`summary` compress) — require a live subscription/API key, verified manually instead and documented in `plan-stage-3.md`/`plan-stage-4.md`

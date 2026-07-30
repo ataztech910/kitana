@@ -1,6 +1,7 @@
 node_modules/
 dist/
 .kitana/
+.kitana-*/
 .turbo/
 *.log
 .DS_Store
