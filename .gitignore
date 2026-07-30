@@ -1,0 +1,6 @@
+node_modules/
+dist/
+.kitana/
+.turbo/
+*.log
+.DS_Store
