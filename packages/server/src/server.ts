@@ -1,6 +1,6 @@
 import { createServer, IncomingMessage, ServerResponse } from 'http'
 import { handleCompletions } from './handlers/completions'
-import { checkClaudeInstalled, checkClaudeAuth, ensureClaudeInstalled, ensureClaudeLoggedIn } from './providers/claude'
+import { checkClaudeInstalled, checkClaudeAuth, ensureClaudeInstalled, ensureClaudeLoggedIn } from '@kitana-sdk/core'
 
 const PORT = Number(process.env.PORT) || 4141
 const RUN_ID = `${Date.now()}-${process.pid}`

@@ -1,0 +1,225 @@
+import { writeFileSync, unlinkSync } from 'fs'
+import { join } from 'path'
+import { tmpdir } from 'os'
+import { isBinaryAvailable, run, spawnAsync } from '../platform'
+
+function withSystemPromptFile<T>(systemPrompt: string | undefined, fn: (extraArgs: string[]) => T): T {
+  if (!systemPrompt) return fn([])
+
+  const file = join(tmpdir(), `kitana-system-prompt-${process.pid}-${Math.random().toString(36).slice(2)}.txt`)
+  writeFileSync(file, systemPrompt, 'utf8')
+
+  try {
+    return fn(['--append-system-prompt-file', file])
+  } finally {
+    try { unlinkSync(file) } catch { /* best effort cleanup */ }
+  }
+}
+
+export interface ClaudeResponse {
+  type: string
+  result: string
+  total_cost_usd: number
+  usage: {
+    input_tokens: number
+    output_tokens: number
+  }
+  modelUsage: Record<string, {
+    inputTokens: number
+    outputTokens: number
+    costUSD: number
+  }>
+}
+
+export function checkClaudeInstalled(): boolean {
+  return isBinaryAvailable('claude')
+}
+
+export function checkClaudeAuth(): { loggedIn: boolean; subscriptionType: string | null; email?: string } {
+  const result = run('claude', ['auth', 'status'], { encoding: 'utf8', timeout: 10000 })
+
+  if (result.status !== 0 || !result.stdout) {
+    return { loggedIn: false, subscriptionType: null }
+  }
+
+  try {
+    const status = JSON.parse(result.stdout)
+    return {
+      loggedIn: Boolean(status.loggedIn),
+      subscriptionType: status.subscriptionType ?? null,
+      email: status.email
+    }
+  } catch {
+    return { loggedIn: false, subscriptionType: null }
+  }
+}
+
+const INSTALL_INSTRUCTIONS = `Claude CLI not found in PATH.
+
+Install:
+  npm install -g @anthropic-ai/claude-code
+
+After installing, sign in:
+  claude auth login
+
+Then restart the Kitana server.`
+
+export async function ensureClaudeInstalled(): Promise<boolean> {
+  if (checkClaudeInstalled()) return true
+
+  console.log('Claude CLI not found. Installing @anthropic-ai/claude-code...')
+  const result = run('npm', ['install', '-g', '@anthropic-ai/claude-code'], {
+    encoding: 'utf8',
+    stdio: 'inherit'
+  })
+
+  if (result.status !== 0) {
+    console.log('Automatic install failed. Install manually: npm install -g @anthropic-ai/claude-code')
+    return false
+  }
+
+  if (!checkClaudeInstalled()) {
+    console.log('Install finished, but claude is still not found in PATH. You may need to restart your terminal.')
+    return false
+  }
+
+  console.log('Claude CLI installed.')
+  return true
+}
+
+export function ensureClaudeLoggedIn(): boolean {
+  const auth = checkClaudeAuth()
+  if (auth.loggedIn) return true
+
+  console.log('Not signed in to Claude CLI. Running claude auth login...')
+  const result = run('claude', ['auth', 'login'], {
+    encoding: 'utf8',
+    stdio: 'inherit'
+  })
+
+  if (result.status !== 0) {
+    console.log('Sign-in did not complete. Run manually: claude auth login')
+    return false
+  }
+
+  return checkClaudeAuth().loggedIn
+}
+
+export function callClaude(prompt: string, model?: string, systemPrompt?: string): ClaudeResponse {
+  if (!checkClaudeInstalled()) {
+    throw new Error(INSTALL_INSTRUCTIONS)
+  }
+
+  return withSystemPromptFile(systemPrompt, extraArgs => {
+    const args = ['-p', '--output-format', 'json', ...extraArgs]
+
+    if (model && model !== 'auto') {
+      args.push('--model', model)
+    }
+
+    // Prompt goes via stdin, not as a CLI argument — a positional argument
+    // containing newlines gets mangled by cmd.exe's line-based command parsing
+    // on Windows (silently truncates/empties the argument).
+    const result = run('claude', args, {
+      encoding: 'utf8',
+      timeout: 30000,
+      input: prompt
+    })
+
+    if (result.status !== 0 || result.signal) {
+      throw new Error(`Claude CLI error: ${result.stderr || result.signal}`)
+    }
+
+    return JSON.parse(result.stdout)
+  })
+}
+
+interface StreamJsonEvent {
+  type: string
+  event?: { type: string; delta?: { type: string; text?: string } }
+  [key: string]: unknown
+}
+
+export function streamClaude(
+  prompt: string,
+  model: string | undefined,
+  onDelta: (text: string) => void,
+  systemPrompt?: string
+): Promise<ClaudeResponse> {
+  return new Promise((resolve, reject) => {
+    if (!checkClaudeInstalled()) {
+      reject(new Error(INSTALL_INSTRUCTIONS))
+      return
+    }
+
+    let systemPromptFile: string | undefined
+    if (systemPrompt) {
+      systemPromptFile = join(tmpdir(), `kitana-system-prompt-${process.pid}-${Math.random().toString(36).slice(2)}.txt`)
+      writeFileSync(systemPromptFile, systemPrompt, 'utf8')
+    }
+
+    const cleanup = () => {
+      if (systemPromptFile) {
+        try { unlinkSync(systemPromptFile) } catch { /* best effort cleanup */ }
+      }
+    }
+
+    const args = ['-p', '--output-format', 'stream-json', '--include-partial-messages', '--verbose']
+
+    if (systemPromptFile) {
+      args.push('--append-system-prompt-file', systemPromptFile)
+    }
+
+    if (model && model !== 'auto') {
+      args.push('--model', model)
+    }
+
+    const child = spawnAsync('claude', args)
+    let buffer = ''
+    let stderr = ''
+    let result: ClaudeResponse | undefined
+
+    child.stdin.write(prompt)
+    child.stdin.end()
+
+    child.stdout.setEncoding('utf8')
+    child.stdout.on('data', (chunk: string) => {
+      buffer += chunk
+      const lines = buffer.split('\n')
+      buffer = lines.pop() ?? ''
+
+      for (const line of lines) {
+        if (!line.trim()) continue
+
+        let event: StreamJsonEvent
+        try {
+          event = JSON.parse(line)
+        } catch {
+          continue
+        }
+
+        if (event.type === 'stream_event' && event.event?.type === 'content_block_delta') {
+          const text = event.event.delta?.text
+          if (text) onDelta(text)
+        }
+
+        if (event.type === 'result') {
+          result = event as unknown as ClaudeResponse
+        }
+      }
+    })
+
+    child.stderr.on('data', (chunk: string) => { stderr += chunk })
+
+    child.on('error', e => { cleanup(); reject(e) })
+
+    child.on('close', code => {
+      cleanup()
+      if (result) {
+        resolve(result)
+        return
+      }
+      reject(new Error(`Claude CLI error (exit ${code}): ${stderr || 'no result event received'}`))
+    })
+  })
+}

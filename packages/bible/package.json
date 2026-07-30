@@ -1,5 +1,5 @@
 {
-  "name": "@kitana-sdk/server",
+  "name": "@kitana-sdk/bible",
   "version": "0.1.0",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -8,14 +8,13 @@
   },
   "scripts": {
     "build": "tsc",
-    "dev": "ts-node src/server.ts"
+    "dev": "tsc --watch"
   },
   "dependencies": {
     "@kitana-sdk/core": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.4.0",
-    "ts-node": "^10.9.0",
     "@types/node": "^20.0.0"
   }
 }
