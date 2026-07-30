@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import { createServer, IncomingMessage, ServerResponse } from 'http'
 import { handleCompletions } from './handlers/completions'
 import { checkClaudeInstalled, checkClaudeAuth, ensureClaudeInstalled, ensureClaudeLoggedIn } from '@kitana-sdk/core'

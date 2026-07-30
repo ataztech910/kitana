@@ -11,9 +11,9 @@ npm install @kitana-sdk/server
 ## Run
 
 ```bash
-npx kitana-server
-# or, from source:
-PORT=4141 node dist/server.js
+npx @kitana-sdk/server
+# or, if installed as a dependency:
+PORT=4141 kitana-server
 ```
 
 On first run it auto-installs the Claude CLI if missing and prompts you to sign in (`claude auth login`).

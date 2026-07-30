@@ -1,9 +1,12 @@
 {
   "name": "@kitana-sdk/server",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "OpenAI-compatible HTTP server backed by your Claude subscription. No API keys.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "bin": {
+    "kitana-server": "dist/server.js"
+  },
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -14,9 +17,11 @@
   "publishConfig": {
     "access": "public"
   },
+  "files": ["dist"],
   "scripts": {
     "build": "tsc",
-    "dev": "ts-node src/server.ts"
+    "dev": "ts-node src/server.ts",
+    "prepublishOnly": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\" && tsc"
   },
   "dependencies": {
     "@kitana-sdk/core": "workspace:*"

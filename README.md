@@ -27,13 +27,60 @@ Persistent context for agentic pipelines. An agent crashes at step 2 — restart
 
 ## Packages
 
-| Package | What it does |
-|---------|---------------|
-| `@kitana-sdk/core` | detector, router, Vercel AI SDK adapter |
-| `@kitana-sdk/server` | OpenAI-compatible HTTP server |
-| `@kitana-sdk/bible` | project Bible, compressor |
-| `@kitana-sdk/tracker` | OTel middleware, cost calculator |
-| `@kitana-sdk/cli` | `kitana doctor`, `kitana report` |
+| Package | What it does | Status |
+|---------|---------------|--------|
+| [`@kitana-sdk/server`](https://www.npmjs.com/package/@kitana-sdk/server) | OpenAI-compatible HTTP server | published |
+| [`@kitana-sdk/core`](https://www.npmjs.com/package/@kitana-sdk/core) | detector, router, Vercel AI SDK adapter | published |
+| [`@kitana-sdk/bible`](https://www.npmjs.com/package/@kitana-sdk/bible) | project Bible, compressor | published |
+| `@kitana-sdk/tracker` | OTel middleware, cost calculator | not implemented yet |
+| `@kitana-sdk/cli` | `kitana doctor`, `kitana report` | not implemented yet |
+
+**Dependency graph:** `server` depends on `core`. `bible` also depends on `core`, but is otherwise standalone — installing `server` does **not** pull in `bible`. Install `bible` separately if you're building an agentic pipeline that needs persistent context; skip it if you just want an HTTP endpoint.
+
+### Which package do I actually need?
+
+**"I just want to point n8n / OpenClaw / any OpenAI-compatible tool at my Claude subscription"** → install only `@kitana-sdk/server`.
+
+```bash
+npx @kitana-sdk/server
+# listens on http://localhost:4141
+# first run: auto-installs the Claude CLI if missing, prompts `claude auth login` if not signed in
+```
+
+```bash
+curl -X POST http://localhost:4141/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{"model":"auto","messages":[{"role":"user","content":"say PONG"}]}'
+```
+
+Point any OpenAI-compatible client at `http://localhost:4141/v1` — see `integrations.md` for verified n8n and OpenClaw configs.
+
+**"I'm building my own tool/agent in TypeScript and want the router + failover logic directly, without an HTTP layer"** → install `@kitana-sdk/core`.
+
+```bash
+npm install @kitana-sdk/core
+```
+```typescript
+import { createRouter, detect } from '@kitana-sdk/core'
+
+const router = createRouter({ chain: ['claude', 'ollama', 'api-key'] })
+const result = await router.complete({ messages: [{ role: 'user', content: 'Hello' }] })
+```
+
+**"I'm building a multi-step agentic pipeline and need it to survive crashes / model switches"** → install `@kitana-sdk/bible` (in addition to `@kitana-sdk/core`, which it depends on).
+
+```bash
+npm install @kitana-sdk/bible
+```
+```typescript
+import { Bible } from '@kitana-sdk/bible'
+
+const bible = new Bible({ path: '.kitana' })
+const context = await bible.read()       // what's already been done
+await bible.update({ step: 'analyst', stepIndex: 1, result: {...}, tokensUsed: 1500, provider: 'claude-sonnet-4-6' })
+```
+
+See each package's own README for full API details, and `bible.md` in this repo for the design rationale.
 
 ## Integrations
 

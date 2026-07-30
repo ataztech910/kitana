@@ -14,9 +14,11 @@
   "publishConfig": {
     "access": "public"
   },
+  "files": ["dist"],
   "scripts": {
     "build": "tsc",
-    "dev": "tsc --watch"
+    "dev": "tsc --watch",
+    "prepublishOnly": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\" && tsc"
   },
   "dependencies": {
     "@kitana-sdk/core": "workspace:*"
