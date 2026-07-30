@@ -106,15 +106,18 @@
 
 ---
 
-### Стадия 5 — OpenClaw интеграция
-**Срок: 1 неделя**
+### Стадия 5 — OpenClaw интеграция ✅ ГОТОВО
 
 Задача: Kitana как кастомный провайдер в OpenClaw
 
-Что делаем:
-- Тестируем openclaw.json конфиг
-- Проверяем security layer с реальными запросами OpenClaw
-- Документируем setup
+Сделано:
+- Установлен OpenClaw (`npm install -g openclaw`), требует Node 22.22.3+/24.x — потребовалось обновить Node через nvm-windows (мешала отдельная неуправляемая установка Node в `C:\Program Files\nodejs`, пришлось удалить вручную через Настройки Windows)
+- Добавлен провайдер `kitana` в `~/.openclaw/openclaw.json` (`models.providers.kitana`, `api: "openai-completions"`, `baseUrl: "http://localhost:4141/v1"`) рядом с существующим `ollama`, без изменения default-модели
+- Реальная схема конфига оказалась чуть другой, чем в integrations.md (`"api": "openai-completions"`, не `"openai"`; нужен полный `models[]` с cost/contextWindow/maxTokens) — обновить integrations.md
+- `openclaw config validate` — конфиг валиден
+- Реальный тест: `openclaw agent --local --model kitana/auto --message "say PONG"` → `"text":"PONG"`, `winnerProvider:"kitana"`, `fallbackUsed:false`, корректно обработан полный системный промпт OpenClaw (~26KB: AGENTS.md/SOUL.md/tools/skills)
+
+Найденный и исправленный баг (реальная нагрузка от OpenClaw это выявила): большой системный промпт (~26KB) через позиционный CLI-аргумент вызывал `"Claude CLI error: The command line is too long."` на Windows — это было демонстрацией того, зачем нужен был стдин-фикс из Стадии 4, а не новый баг (сервер на момент теста снова оказался запущен со старой (pre-fix) веткой кода — после переключения на правильную ветку и рестарта сервера всё заработало)
 
 **Milestone:** видео "OpenClaw + Kitana — настройка за 20 минут"
 
