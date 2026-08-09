@@ -21,8 +21,8 @@ importers:
   packages/adk:
     dependencies:
       '@kitana-sdk/core':
-        specifier: workspace:*
-        version: link:../core
+        specifier: ^0.1.0
+        version: 0.1.0(encoding@0.1.13)(ws@8.21.3)(zod@4.4.3)
     devDependencies:
       '@google/adk':
         specifier: ^1.6.0
@@ -57,7 +57,7 @@ importers:
         version: 0.30.1(encoding@0.1.13)
       openai:
         specifier: ^4.68.0
-        version: 4.104.0(encoding@0.1.13)(ws@8.21.3)
+        version: 4.104.0(encoding@0.1.13)(ws@8.21.3)(zod@4.4.3)
     devDependencies:
       '@types/node':
         specifier: ^20.0.0
@@ -436,6 +436,9 @@ packages:
     engines: {node: '>= 10.16.0'}
     peerDependencies:
       jsep: ^0.4.0||^1.0.0
+
+  '@kitana-sdk/core@0.1.0':
+    resolution: {integrity: sha512-T/ddUt+z9nbTnt8aaVXWHC8qz+qONRGVZpk/qj+smUBO5AoUW/TRM9/dRbpiXMX72SvQP7MfepDwxPJ5pkqq+w==}
 
   '@mikro-orm/core@6.6.16':
     resolution: {integrity: sha512-ym26fbhTti7Zh6oN1y74byoUoMEq1ahckiV7BZX5pHU/0OaUESiQA+Zar2Tv2ZFuZA9946XQ805F7/4NH6oDUQ==}
@@ -3331,6 +3334,15 @@ snapshots:
     dependencies:
       jsep: 1.4.0
 
+  '@kitana-sdk/core@0.1.0(encoding@0.1.13)(ws@8.21.3)(zod@4.4.3)':
+    dependencies:
+      '@anthropic-ai/sdk': 0.30.1(encoding@0.1.13)
+      openai: 4.104.0(encoding@0.1.13)(ws@8.21.3)(zod@4.4.3)
+    transitivePeerDependencies:
+      - encoding
+      - ws
+      - zod
+
   '@mikro-orm/core@6.6.16':
     dependencies:
       dataloader: 2.2.3
@@ -3363,7 +3375,7 @@ snapshots:
     dependencies:
       '@mikro-orm/core': 6.6.16
       fs-extra: 11.3.3
-      knex: 3.2.10(pg@8.20.0)
+      knex: 3.2.10(pg@8.20.0)(sqlite3@5.1.7)
       sqlstring: 2.3.3
     optionalDependencies:
       mariadb: 3.4.5
@@ -4985,27 +4997,6 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  knex@3.2.10(pg@8.20.0):
-    dependencies:
-      colorette: 2.0.19
-      commander: 10.0.1
-      debug: 4.3.4
-      escalade: 3.2.0
-      esm: 3.2.25
-      get-package-type: 0.1.0
-      getopts: 2.3.0
-      interpret: 2.2.0
-      lodash: 4.18.1
-      pg-connection-string: 2.6.2
-      rechoir: 0.8.0
-      resolve-from: 5.0.0
-      tarn: 3.1.2
-      tildify: 2.0.0
-    optionalDependencies:
-      pg: 8.20.0
-    transitivePeerDependencies:
-      - supports-color
-
   knex@3.2.10(pg@8.20.0)(sqlite3@5.1.7):
     dependencies:
       colorette: 2.0.19
@@ -5333,7 +5324,7 @@ snapshots:
       is-inside-container: 1.0.0
       wsl-utils: 0.1.0
 
-  openai@4.104.0(encoding@0.1.13)(ws@8.21.3):
+  openai@4.104.0(encoding@0.1.13)(ws@8.21.3)(zod@4.4.3):
     dependencies:
       '@types/node': 18.19.130
       '@types/node-fetch': 2.6.13
@@ -5344,6 +5335,7 @@ snapshots:
       node-fetch: 2.7.0(encoding@0.1.13)
     optionalDependencies:
       ws: 8.21.3
+      zod: 4.4.3
     transitivePeerDependencies:
       - encoding
 
