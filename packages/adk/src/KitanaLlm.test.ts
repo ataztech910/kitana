@@ -107,4 +107,29 @@ describe('KitanaLlm', () => {
     const llm = new KitanaLlm({ model: 'auto' })
     await expect(llm.connect(fakeRequest())).rejects.toThrow(/does not support live/)
   })
+
+  it('yields an error event instead of throwing when every provider fails', async () => {
+    completeMock.mockRejectedValueOnce(new Error('All providers in chain failed. Last error: fetch failed'))
+    const llm = new KitanaLlm({ model: 'auto' })
+
+    // The generator must not throw — a caller doing `for await` should still
+    // get exactly one event back, not an unhandled rejection.
+    const results: unknown[] = []
+    await expect(
+      (async () => {
+        for await (const chunk of llm.generateContentAsync(fakeRequest())) {
+          results.push(chunk)
+        }
+      })()
+    ).resolves.toBeUndefined()
+
+    expect(results).toEqual([
+      {
+        errorCode: 'KITANA_PROVIDER_FAILED',
+        errorMessage: 'All providers in chain failed. Last error: fetch failed',
+        turnComplete: true,
+        partial: false
+      }
+    ])
+  })
 })

@@ -1,6 +1,6 @@
 {
   "name": "@kitana-sdk/adk",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Google ADK (JS) model adapter for Kitana — lets LlmAgent route through Claude CLI / Ollama / API-key failover instead of Gemini/Vertex.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

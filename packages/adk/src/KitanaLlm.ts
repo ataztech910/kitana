@@ -93,22 +93,38 @@ export class KitanaLlm extends BaseLlm {
 
     messages.push(...contentsToMessages(llmRequest.contents))
 
-    const response = await this.router.complete({
-      messages,
-      model: llmRequest.model?.startsWith(MODEL_PREFIX)
-        ? llmRequest.model.slice(MODEL_PREFIX.length)
-        : llmRequest.model ?? this.downstreamModel
-    })
+    const downstreamModel = llmRequest.model?.startsWith(MODEL_PREFIX)
+      ? llmRequest.model.slice(MODEL_PREFIX.length)
+      : llmRequest.model ?? this.downstreamModel
 
-    yield {
-      content: { role: 'model', parts: [{ text: response.content }] },
-      turnComplete: true,
-      partial: false,
-      customMetadata: { kitanaProvider: response.provider }
+    // Letting router.complete()'s rejection propagate as a thrown exception out of
+    // this generator is risky: if ADK's Runner doesn't uniformly convert an
+    // unhandled rejection from a custom BaseLlm into an error event, the caller's
+    // for-await loop can just end with zero iterations — a silent failure that
+    // looks identical to "nothing to say", not an error (observed: intermittent
+    // empty output with exit code 0, no stack trace, no error event — see
+    // ataztech910/kitana#<workshop-debug>). Catch here and always yield a
+    // response — either real content or an explicit error — so callers get at
+    // least one event no matter what.
+    try {
+      const response = await this.router.complete({ messages, model: downstreamModel })
+      yield {
+        content: { role: 'model', parts: [{ text: response.content }] },
+        turnComplete: true,
+        partial: false,
+        customMetadata: { kitanaProvider: response.provider }
+      }
+    } catch (err) {
+      yield {
+        errorCode: 'KITANA_PROVIDER_FAILED',
+        errorMessage: err instanceof Error ? err.message : String(err),
+        turnComplete: true,
+        partial: false
+      }
     }
   }
 
-  async connect(): Promise<BaseLlmConnection> {
+  async connect(_llmRequest: LlmRequest): Promise<BaseLlmConnection> {
     throw new Error(
       'KitanaLlm does not support live/bidi connections (connect()) — only generateContentAsync (text-turn) requests.'
     )
