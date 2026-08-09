@@ -3,6 +3,19 @@ import { join } from 'path'
 import { tmpdir } from 'os'
 import { isBinaryAvailable, run, spawnAsync } from '../platform'
 
+// Kitana is a proxy ("only send a prompt, get an answer back"), not an agent —
+// callers (e.g. an ADK LlmAgent) expect a plain text completion. Without the
+// two lines below, `claude -p` still runs as full Claude Code: it inherits the
+// caller's cwd, so its system prompt bakes in *that* project's git status/env
+// info (the model ends up commenting on the caller's uncommitted changes even
+// when asked something unrelated), and it keeps default tool access
+// (Bash/Edit/...), so it can act on the caller's filesystem instead of just
+// answering. `--bare` would also strip this, but it forces API-key-only auth
+// and drops OAuth/subscription login — not an option for a no-API-key proxy.
+const NEUTRAL_CWD = tmpdir()
+const DISALLOWED_TOOLS =
+  'Bash Read Write Edit Glob Grep WebFetch WebSearch NotebookEdit Task TodoWrite'
+
 function withSystemPromptFile<T>(systemPrompt: string | undefined, fn: (extraArgs: string[]) => T): T {
   if (!systemPrompt) return fn([])
 
@@ -111,7 +124,11 @@ export function callClaude(prompt: string, model?: string, systemPrompt?: string
   }
 
   return withSystemPromptFile(systemPrompt, extraArgs => {
-    const args = ['-p', '--output-format', 'json', ...extraArgs]
+    const args = [
+      '-p', '--output-format', 'json',
+      '--disallowedTools', DISALLOWED_TOOLS,
+      ...extraArgs
+    ]
 
     if (model && model !== 'auto') {
       args.push('--model', model)
@@ -123,7 +140,8 @@ export function callClaude(prompt: string, model?: string, systemPrompt?: string
     const result = run('claude', args, {
       encoding: 'utf8',
       timeout: 30000,
-      input: prompt
+      input: prompt,
+      cwd: NEUTRAL_CWD
     })
 
     if (result.status !== 0 || result.signal) {
@@ -164,7 +182,10 @@ export function streamClaude(
       }
     }
 
-    const args = ['-p', '--output-format', 'stream-json', '--include-partial-messages', '--verbose']
+    const args = [
+      '-p', '--output-format', 'stream-json', '--include-partial-messages', '--verbose',
+      '--disallowedTools', DISALLOWED_TOOLS
+    ]
 
     if (systemPromptFile) {
       args.push('--append-system-prompt-file', systemPromptFile)
@@ -174,7 +195,7 @@ export function streamClaude(
       args.push('--model', model)
     }
 
-    const child = spawnAsync('claude', args)
+    const child = spawnAsync('claude', args, { cwd: NEUTRAL_CWD })
     let buffer = ''
     let stderr = ''
     let result: ClaudeResponse | undefined
