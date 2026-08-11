@@ -3,12 +3,13 @@ import type { LlmRequest } from '@google/adk'
 import type { CompleteRequest, CompleteResponse } from '@kitana-sdk/core'
 
 const completeMock = vi.fn<(req: CompleteRequest) => Promise<CompleteResponse>>()
+const streamMock = vi.fn<(req: CompleteRequest, onDelta: (text: string) => void) => Promise<CompleteResponse>>()
 
 vi.mock('@kitana-sdk/core', async () => {
   const actual = await vi.importActual<typeof import('@kitana-sdk/core')>('@kitana-sdk/core')
   return {
     ...actual,
-    createRouter: vi.fn(() => ({ complete: completeMock }))
+    createRouter: vi.fn(() => ({ complete: completeMock, stream: streamMock }))
   }
 })
 
@@ -118,6 +119,52 @@ describe('KitanaLlm', () => {
     await expect(
       (async () => {
         for await (const chunk of llm.generateContentAsync(fakeRequest())) {
+          results.push(chunk)
+        }
+      })()
+    ).resolves.toBeUndefined()
+
+    expect(results).toEqual([
+      {
+        errorCode: 'KITANA_PROVIDER_FAILED',
+        errorMessage: 'All providers in chain failed. Last error: fetch failed',
+        turnComplete: true,
+        partial: false
+      }
+    ])
+  })
+
+  it('streams partial deltas followed by one final turnComplete event', async () => {
+    streamMock.mockImplementationOnce(async (_req, onDelta) => {
+      onDelta('Hel')
+      onDelta('lo')
+      return fakeResponse('Hello')
+    })
+    const llm = new KitanaLlm({ model: 'auto' })
+
+    const results = []
+    for await (const chunk of llm.generateContentAsync(fakeRequest(), true)) results.push(chunk)
+
+    expect(results).toEqual([
+      { content: { role: 'model', parts: [{ text: 'Hel' }] }, partial: true, turnComplete: false },
+      { content: { role: 'model', parts: [{ text: 'lo' }] }, partial: true, turnComplete: false },
+      {
+        content: { role: 'model', parts: [{ text: 'Hello' }] },
+        partial: false,
+        turnComplete: true,
+        customMetadata: { kitanaProvider: 'claude' }
+      }
+    ])
+  })
+
+  it('yields an error event instead of throwing when streaming fails', async () => {
+    streamMock.mockRejectedValueOnce(new Error('All providers in chain failed. Last error: fetch failed'))
+    const llm = new KitanaLlm({ model: 'auto' })
+
+    const results: unknown[] = []
+    await expect(
+      (async () => {
+        for await (const chunk of llm.generateContentAsync(fakeRequest(), true)) {
           results.push(chunk)
         }
       })()

@@ -1,5 +1,5 @@
 import { IncomingMessage, ServerResponse } from 'http'
-import { createRouter, streamClaude, Message } from '@kitana-sdk/core'
+import { createRouter, Message } from '@kitana-sdk/core'
 
 interface OpenAIRequest {
   model: string
@@ -84,7 +84,7 @@ async function handleStreamingCompletion(
 ) {
   const id = `chatcmpl-${Date.now()}`
   const created = Math.floor(Date.now() / 1000)
-  const prompt = messages.map(m => `${m.role}: ${m.content}`).join('\n')
+  let resolvedModel = model && model !== 'auto' ? model : 'claude-sonnet-4-6'
 
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
@@ -97,7 +97,7 @@ async function handleStreamingCompletion(
       id,
       object: 'chat.completion.chunk',
       created,
-      model: model && model !== 'auto' ? model : 'claude-sonnet-4-6',
+      model: resolvedModel,
       choices: [{ index: 0, delta, finish_reason: finishReason }]
     }
     res.write(`data: ${JSON.stringify(chunk)}\n\n`)
@@ -109,13 +109,14 @@ async function handleStreamingCompletion(
   try {
     sendChunk({ role: 'assistant', content: '' })
 
-    await streamClaude(prompt, model, text => {
+    const result = await router.stream({ messages, model }, text => {
       sendChunk({ content: text })
     })
+    resolvedModel = result.model
 
     sendChunk({}, 'stop')
     res.write('data: [DONE]\n\n')
-    console.log(`[completions] streaming request finished in ${Date.now() - startedAt}ms`)
+    console.log(`[completions] streaming request finished in ${Date.now() - startedAt}ms via ${result.provider}`)
   } catch (e) {
     console.log(`[completions] streaming request failed after ${Date.now() - startedAt}ms: ${(e as Error).message}`)
     res.write(`data: ${JSON.stringify({ error: (e as Error).message })}\n\n`)

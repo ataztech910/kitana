@@ -10,6 +10,46 @@ function partText(part: Part): string {
   return typeof part.text === 'string' ? part.text : ''
 }
 
+// Bridges router.stream()'s push-style onDelta callback into the pull-style
+// async generator generateContentAsync must return. Node is single-threaded,
+// so a simple queue + one pending resolver is enough — no locking needed.
+class AsyncChannel<T> {
+  private readonly queue: T[] = []
+  private closed = false
+  private failure: unknown
+  private wake: (() => void) | undefined
+
+  push(item: T): void {
+    this.queue.push(item)
+    this.wake?.()
+  }
+
+  close(): void {
+    this.closed = true
+    this.wake?.()
+  }
+
+  fail(err: unknown): void {
+    this.failure = err
+    this.closed = true
+    this.wake?.()
+  }
+
+  async *[Symbol.asyncIterator](): AsyncGenerator<T, void> {
+    for (;;) {
+      if (this.queue.length > 0) {
+        yield this.queue.shift() as T
+        continue
+      }
+      if (this.closed) {
+        if (this.failure !== undefined) throw this.failure
+        return
+      }
+      await new Promise<void>(resolve => { this.wake = resolve })
+    }
+  }
+}
+
 // @google/genai's ContentUnion is a loose union (string | Content | Part | Part[] | Content[]).
 // ADK's LlmRequest.config.systemInstruction is typed as ContentUnion — narrow it by shape,
 // not by relying on a single expected type, since callers may pass any of these forms.
@@ -79,11 +119,7 @@ export class KitanaLlm extends BaseLlm {
 
   async *generateContentAsync(
     llmRequest: LlmRequest,
-    // Streaming isn't implemented yet — @kitana-sdk/core's router.complete() is a
-    // single non-streaming call. A streaming path exists in providers/claude.ts
-    // (streamClaude) but isn't wired through the router yet. Accepted for API
-    // compatibility with BaseLlm; ignored for now, always yields one full response.
-    _stream = false,
+    stream = false,
     _abortSignal?: AbortSignal
   ): AsyncGenerator<LlmResponse, void> {
     const messages: Message[] = []
@@ -97,8 +133,8 @@ export class KitanaLlm extends BaseLlm {
       ? llmRequest.model.slice(MODEL_PREFIX.length)
       : llmRequest.model ?? this.downstreamModel
 
-    // Letting router.complete()'s rejection propagate as a thrown exception out of
-    // this generator is risky: if ADK's Runner doesn't uniformly convert an
+    // Letting router.complete()/.stream()'s rejection propagate as a thrown exception
+    // out of this generator is risky: if ADK's Runner doesn't uniformly convert an
     // unhandled rejection from a custom BaseLlm into an error event, the caller's
     // for-await loop can just end with zero iterations — a silent failure that
     // looks identical to "nothing to say", not an error (observed: intermittent
@@ -106,13 +142,55 @@ export class KitanaLlm extends BaseLlm {
     // ataztech910/kitana#<workshop-debug>). Catch here and always yield a
     // response — either real content or an explicit error — so callers get at
     // least one event no matter what.
+    if (!stream) {
+      try {
+        const response = await this.router.complete({ messages, model: downstreamModel })
+        yield {
+          content: { role: 'model', parts: [{ text: response.content }] },
+          turnComplete: true,
+          partial: false,
+          customMetadata: { kitanaProvider: response.provider }
+        }
+      } catch (err) {
+        yield {
+          errorCode: 'KITANA_PROVIDER_FAILED',
+          errorMessage: err instanceof Error ? err.message : String(err),
+          turnComplete: true,
+          partial: false
+        }
+      }
+      return
+    }
+
+    // Push-style router.stream(onDelta) is bridged into this pull-style generator
+    // via AsyncChannel. Each delta is yielded as its own partial event (mirrors
+    // @google/adk's own NonProgressiveStrategy: incremental chunks carry just the
+    // new text, not an accumulated snapshot); the router's resolved value carries
+    // the full text and is yielded once more as the non-partial, turnComplete event.
+    const channel = new AsyncChannel<LlmResponse>()
+
+    this.router
+      .stream({ messages, model: downstreamModel }, text => {
+        channel.push({
+          content: { role: 'model', parts: [{ text }] },
+          partial: true,
+          turnComplete: false
+        })
+      })
+      .then(response => {
+        channel.push({
+          content: { role: 'model', parts: [{ text: response.content }] },
+          partial: false,
+          turnComplete: true,
+          customMetadata: { kitanaProvider: response.provider }
+        })
+        channel.close()
+      })
+      .catch(err => channel.fail(err))
+
     try {
-      const response = await this.router.complete({ messages, model: downstreamModel })
-      yield {
-        content: { role: 'model', parts: [{ text: response.content }] },
-        turnComplete: true,
-        partial: false,
-        customMetadata: { kitanaProvider: response.provider }
+      for await (const chunk of channel) {
+        yield chunk
       }
     } catch (err) {
       yield {
