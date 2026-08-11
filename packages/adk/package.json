@@ -1,6 +1,6 @@
 {
   "name": "@kitana-sdk/adk",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Google ADK (JS) model adapter for Kitana — lets LlmAgent route through Claude CLI / Ollama / API-key failover instead of Gemini/Vertex.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -10,18 +10,27 @@
     "url": "git+https://github.com/ataztech910/kitana.git",
     "directory": "packages/adk"
   },
-  "keywords": ["claude", "google-adk", "adk", "ai", "agent", "kitana"],
+  "keywords": [
+    "claude",
+    "google-adk",
+    "adk",
+    "ai",
+    "agent",
+    "kitana"
+  ],
   "publishConfig": {
     "access": "public"
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
     "prepublishOnly": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\" && tsc"
   },
   "dependencies": {
-    "@kitana-sdk/core": "^0.1.0"
+    "@kitana-sdk/core": "^0.1.3"
   },
   "peerDependencies": {
     "@google/adk": ">=1.0.0",
@@ -30,7 +39,7 @@
   "devDependencies": {
     "@google/adk": "^1.6.0",
     "@google/genai": "^1.0.0",
-    "typescript": "^5.4.0",
-    "@types/node": "^20.0.0"
+    "@types/node": "^20.0.0",
+    "typescript": "^5.4.0"
   }
 }

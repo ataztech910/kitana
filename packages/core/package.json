@@ -1,6 +1,6 @@
 {
   "name": "@kitana-sdk/core",
-  "version": "0.1.1",
+  "version": "0.1.3",
   "description": "Router, provider detection, and failover for AI CLI subscriptions (Claude, Ollama) — no API keys required.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -10,11 +10,21 @@
     "url": "git+https://github.com/ataztech910/kitana.git",
     "directory": "packages/core"
   },
-  "keywords": ["claude", "claude-code", "ai", "llm", "router", "failover", "ollama"],
+  "keywords": [
+    "claude",
+    "claude-code",
+    "ai",
+    "llm",
+    "router",
+    "failover",
+    "ollama"
+  ],
   "publishConfig": {
     "access": "public"
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
