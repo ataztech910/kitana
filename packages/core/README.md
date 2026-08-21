@@ -18,6 +18,7 @@ const env = await detect()
 
 const router = createRouter({
   chain: ['claude', 'codex', 'ollama', 'api-key'],
+  models: { ollama: 'mistral:instruct', claude: 'sonnet' },
   apiKeys: { anthropic: process.env.ANTHROPIC_API_KEY }
 })
 
@@ -27,6 +28,10 @@ const response = await router.complete({
 })
 // { content, model, provider, usage }
 ```
+
+`models` configures a default per provider when the request model is `auto` or
+omitted. An explicit request model still takes precedence. Providers without a
+configured model retain their existing defaults.
 
 ### Streaming
 

@@ -169,6 +169,8 @@ export interface KitanaLlmParams {
   /** Provider failover order. Defaults to Claude -> Codex -> Ollama -> API key. */
   chain?: ProviderName[]
   apiKeys?: RouterConfig['apiKeys']
+  /** Provider-specific models used when model is "auto". */
+  models?: RouterConfig['models']
 }
 
 /**
@@ -196,7 +198,8 @@ export class KitanaLlm extends BaseLlm {
       : params.model
     this.router = createRouter({
       chain: params.chain ?? ['claude', 'codex', 'ollama', 'api-key'],
-      apiKeys: params.apiKeys
+      apiKeys: params.apiKeys,
+      models: params.models
     })
   }
 

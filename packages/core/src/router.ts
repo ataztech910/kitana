@@ -17,6 +17,11 @@ export interface RouterConfig {
     openai?: string
   }
   /**
+   * Per-provider model used when a request omits model or passes "auto".
+   * An explicit request model always takes precedence.
+   */
+  models?: Partial<Record<ProviderName, string>>
+  /**
    * Called when falling back to the next provider in the chain. Return a
    * string to prepend as extra context (e.g. a compressed Bible summary) to
    * the request sent to the next provider. Core has no dependency on
@@ -35,11 +40,16 @@ function buildPrompt(messages: Message[]): string {
   return messages.map(m => `${m.role}: ${m.content}`).join('\n')
 }
 
-const claudeHandler: ProviderHandler = async (req, _config, systemPrompt) => {
-  const claudeRes = callClaude(buildPrompt(req.messages), req.model, systemPrompt)
+function resolveModel(req: CompleteRequest, config: RouterConfig, provider: ProviderName): string | undefined {
+  return req.model && req.model !== 'auto' ? req.model : config.models?.[provider]
+}
+
+const claudeHandler: ProviderHandler = async (req, config, systemPrompt) => {
+  const model = resolveModel(req, config, 'claude')
+  const claudeRes = callClaude(buildPrompt(req.messages), model, systemPrompt)
   const usedModel = claudeRes.modelUsage
-    ? Object.keys(claudeRes.modelUsage).pop() ?? 'claude-sonnet-4-6'
-    : 'claude-sonnet-4-6'
+    ? Object.keys(claudeRes.modelUsage).pop() ?? model ?? 'claude-sonnet-4-6'
+    : model ?? 'claude-sonnet-4-6'
 
   return {
     content: claudeRes.result,
@@ -53,8 +63,8 @@ const claudeHandler: ProviderHandler = async (req, _config, systemPrompt) => {
   }
 }
 
-const ollamaHandler: ProviderHandler = async (req, _config, systemPrompt) => {
-  const model = req.model && req.model !== 'auto' ? req.model : 'llama3'
+const ollamaHandler: ProviderHandler = async (req, config, systemPrompt) => {
+  const model = resolveModel(req, config, 'ollama') ?? 'llama3'
   const res = await callOllama(req.messages, model, systemPrompt)
   const choice = res.choices?.[0]?.message?.content ?? ''
 
@@ -70,8 +80,8 @@ const ollamaHandler: ProviderHandler = async (req, _config, systemPrompt) => {
   }
 }
 
-const codexHandler: ProviderHandler = async (req, _config, systemPrompt) => {
-  const codexRes = callCodex(buildPrompt(req.messages), req.model, systemPrompt)
+const codexHandler: ProviderHandler = async (req, config, systemPrompt) => {
+  const codexRes = callCodex(buildPrompt(req.messages), resolveModel(req, config, 'codex'), systemPrompt)
 
   return {
     content: codexRes.result,
@@ -88,14 +98,15 @@ const codexHandler: ProviderHandler = async (req, _config, systemPrompt) => {
 const apiKeyHandler: ProviderHandler = async (req, config, systemPrompt) => {
   const anthropicKey = config.apiKeys?.anthropic ?? process.env.ANTHROPIC_API_KEY
   const openaiKey = config.apiKeys?.openai ?? process.env.OPENAI_API_KEY
+  const model = resolveModel(req, config, 'api-key')
 
   if (anthropicKey) {
-    const res = await callAnthropicApi(req.messages, req.model, anthropicKey, systemPrompt)
+    const res = await callAnthropicApi(req.messages, model, anthropicKey, systemPrompt)
     return { content: res.content, model: res.model, provider: 'api-key', usage: res.usage }
   }
 
   if (openaiKey) {
-    const res = await callOpenAiApi(req.messages, req.model, openaiKey, systemPrompt)
+    const res = await callOpenAiApi(req.messages, model, openaiKey, systemPrompt)
     return { content: res.content, model: res.model, provider: 'api-key', usage: res.usage }
   }
 
@@ -116,11 +127,12 @@ type StreamProviderHandler = (
   onDelta: (text: string) => void
 ) => Promise<CompleteResponse>
 
-const claudeStreamHandler: StreamProviderHandler = async (req, _config, systemPrompt, onDelta) => {
-  const claudeRes = await streamClaude(buildPrompt(req.messages), req.model, onDelta, systemPrompt)
+const claudeStreamHandler: StreamProviderHandler = async (req, config, systemPrompt, onDelta) => {
+  const model = resolveModel(req, config, 'claude')
+  const claudeRes = await streamClaude(buildPrompt(req.messages), model, onDelta, systemPrompt)
   const usedModel = claudeRes.modelUsage
-    ? Object.keys(claudeRes.modelUsage).pop() ?? 'claude-sonnet-4-6'
-    : 'claude-sonnet-4-6'
+    ? Object.keys(claudeRes.modelUsage).pop() ?? model ?? 'claude-sonnet-4-6'
+    : model ?? 'claude-sonnet-4-6'
 
   return {
     content: claudeRes.result,
@@ -134,8 +146,8 @@ const claudeStreamHandler: StreamProviderHandler = async (req, _config, systemPr
   }
 }
 
-const ollamaStreamHandler: StreamProviderHandler = async (req, _config, systemPrompt, onDelta) => {
-  const model = req.model && req.model !== 'auto' ? req.model : 'llama3'
+const ollamaStreamHandler: StreamProviderHandler = async (req, config, systemPrompt, onDelta) => {
+  const model = resolveModel(req, config, 'ollama') ?? 'llama3'
   const res = await streamOllama(req.messages, model, onDelta, systemPrompt)
   const choice = res.choices?.[0]?.message?.content ?? ''
 
@@ -151,8 +163,13 @@ const ollamaStreamHandler: StreamProviderHandler = async (req, _config, systemPr
   }
 }
 
-const codexStreamHandler: StreamProviderHandler = async (req, _config, systemPrompt, onDelta) => {
-  const codexRes = await streamCodex(buildPrompt(req.messages), req.model, onDelta, systemPrompt)
+const codexStreamHandler: StreamProviderHandler = async (req, config, systemPrompt, onDelta) => {
+  const codexRes = await streamCodex(
+    buildPrompt(req.messages),
+    resolveModel(req, config, 'codex'),
+    onDelta,
+    systemPrompt
+  )
 
   return {
     content: codexRes.result,
@@ -169,14 +186,15 @@ const codexStreamHandler: StreamProviderHandler = async (req, _config, systemPro
 const apiKeyStreamHandler: StreamProviderHandler = async (req, config, systemPrompt, onDelta) => {
   const anthropicKey = config.apiKeys?.anthropic ?? process.env.ANTHROPIC_API_KEY
   const openaiKey = config.apiKeys?.openai ?? process.env.OPENAI_API_KEY
+  const model = resolveModel(req, config, 'api-key')
 
   if (anthropicKey) {
-    const res = await streamAnthropicApi(req.messages, req.model, anthropicKey, onDelta, systemPrompt)
+    const res = await streamAnthropicApi(req.messages, model, anthropicKey, onDelta, systemPrompt)
     return { content: res.content, model: res.model, provider: 'api-key', usage: res.usage }
   }
 
   if (openaiKey) {
-    const res = await streamOpenAiApi(req.messages, req.model, openaiKey, onDelta, systemPrompt)
+    const res = await streamOpenAiApi(req.messages, model, openaiKey, onDelta, systemPrompt)
     return { content: res.content, model: res.model, provider: 'api-key', usage: res.usage }
   }
 

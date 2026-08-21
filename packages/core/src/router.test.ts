@@ -3,10 +3,11 @@ import { createRouter } from './router'
 import * as claudeProvider from './providers/claude'
 import * as codexProvider from './providers/codex'
 import * as ollamaProvider from './providers/ollama'
+import * as apiKeyProvider from './providers/apiKey'
 
 vi.mock('./providers/claude', async () => {
   const actual = await vi.importActual<typeof import('./providers/claude')>('./providers/claude')
-  return { ...actual, streamClaude: vi.fn() }
+  return { ...actual, callClaude: vi.fn(), streamClaude: vi.fn() }
 })
 
 vi.mock('./providers/ollama', async () => {
@@ -18,6 +19,44 @@ vi.mock('./providers/codex', async () => {
   const actual = await vi.importActual<typeof import('./providers/codex')>('./providers/codex')
   return { ...actual, streamCodex: vi.fn(), callCodex: vi.fn() }
 })
+
+vi.mock('./providers/apiKey', async () => {
+  const actual = await vi.importActual<typeof import('./providers/apiKey')>('./providers/apiKey')
+  return {
+    ...actual,
+    callAnthropicApi: vi.fn(),
+    callOpenAiApi: vi.fn(),
+    streamAnthropicApi: vi.fn(),
+    streamOpenAiApi: vi.fn()
+  }
+})
+
+const messages: CompleteRequest['messages'] = [{ role: 'user', content: 'hi' }]
+
+function claudeResponse() {
+  return {
+    type: 'result',
+    result: 'ok',
+    total_cost_usd: 0,
+    usage: { input_tokens: 1, output_tokens: 1 },
+    modelUsage: {}
+  }
+}
+
+function apiResponse(model: string) {
+  return {
+    content: 'ok',
+    model,
+    usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 }
+  }
+}
+
+function ollamaResponse() {
+  return {
+    choices: [{ message: { content: 'ok' } }],
+    usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 }
+  }
+}
 
 describe('router', () => {
   const originalAnthropicKey = process.env.ANTHROPIC_API_KEY
@@ -44,6 +83,147 @@ describe('router', () => {
     await expect(
       router.complete({ messages: [{ role: 'user', content: 'hi' }] })
     ).rejects.toThrow(/No API key configured/)
+  })
+
+  it('uses each provider-specific configured model for auto completion requests', async () => {
+    vi.mocked(claudeProvider.callClaude).mockReturnValueOnce(claudeResponse())
+    vi.mocked(codexProvider.callCodex).mockReturnValueOnce({ result: 'ok', model: 'codex-config' })
+    vi.mocked(ollamaProvider.callOllama).mockResolvedValueOnce(ollamaResponse())
+    vi.mocked(apiKeyProvider.callAnthropicApi).mockResolvedValueOnce(apiResponse('api-config'))
+
+    await createRouter({ chain: ['claude'], models: { claude: 'claude-config' } })
+      .complete({ messages, model: 'auto' })
+    await createRouter({ chain: ['codex'], models: { codex: 'codex-config' } })
+      .complete({ messages, model: 'auto' })
+    await createRouter({ chain: ['ollama'], models: { ollama: 'ollama-config' } })
+      .complete({ messages, model: 'auto' })
+    await createRouter({
+      chain: ['api-key'],
+      apiKeys: { anthropic: 'test-key' },
+      models: { 'api-key': 'api-config' }
+    }).complete({ messages, model: 'auto' })
+
+    expect(claudeProvider.callClaude).toHaveBeenCalledWith(expect.any(String), 'claude-config', undefined)
+    expect(codexProvider.callCodex).toHaveBeenCalledWith(expect.any(String), 'codex-config', undefined)
+    expect(ollamaProvider.callOllama).toHaveBeenCalledWith(messages, 'ollama-config', undefined)
+    expect(apiKeyProvider.callAnthropicApi).toHaveBeenCalledWith(messages, 'api-config', 'test-key', undefined)
+  })
+
+  it('lets an explicit request model override every configured completion model', async () => {
+    vi.mocked(claudeProvider.callClaude).mockReturnValueOnce(claudeResponse())
+    vi.mocked(codexProvider.callCodex).mockReturnValueOnce({ result: 'ok', model: 'request-model' })
+    vi.mocked(ollamaProvider.callOllama).mockResolvedValueOnce(ollamaResponse())
+    vi.mocked(apiKeyProvider.callAnthropicApi).mockResolvedValueOnce(apiResponse('request-model'))
+
+    await createRouter({ chain: ['claude'], models: { claude: 'configured' } })
+      .complete({ messages, model: 'request-model' })
+    await createRouter({ chain: ['codex'], models: { codex: 'configured' } })
+      .complete({ messages, model: 'request-model' })
+    await createRouter({ chain: ['ollama'], models: { ollama: 'configured' } })
+      .complete({ messages, model: 'request-model' })
+    await createRouter({
+      chain: ['api-key'],
+      apiKeys: { anthropic: 'test-key' },
+      models: { 'api-key': 'configured' }
+    }).complete({ messages, model: 'request-model' })
+
+    expect(claudeProvider.callClaude).toHaveBeenCalledWith(expect.any(String), 'request-model', undefined)
+    expect(codexProvider.callCodex).toHaveBeenCalledWith(expect.any(String), 'request-model', undefined)
+    expect(ollamaProvider.callOllama).toHaveBeenCalledWith(messages, 'request-model', undefined)
+    expect(apiKeyProvider.callAnthropicApi).toHaveBeenCalledWith(messages, 'request-model', 'test-key', undefined)
+  })
+
+  it('keeps every current provider default when no configured model is provided', async () => {
+    vi.mocked(claudeProvider.callClaude).mockReturnValueOnce(claudeResponse())
+    vi.mocked(codexProvider.callCodex).mockReturnValueOnce({ result: 'ok', model: 'codex' })
+    vi.mocked(ollamaProvider.callOllama).mockResolvedValueOnce(ollamaResponse())
+    vi.mocked(apiKeyProvider.callAnthropicApi).mockResolvedValueOnce(apiResponse('claude-sonnet-4-6'))
+
+    await createRouter({ chain: ['claude'] }).complete({ messages, model: 'auto' })
+    await createRouter({ chain: ['codex'] }).complete({ messages, model: 'auto' })
+    await createRouter({ chain: ['ollama'] }).complete({ messages, model: 'auto' })
+    await createRouter({ chain: ['api-key'], apiKeys: { anthropic: 'test-key' } })
+      .complete({ messages, model: 'auto' })
+
+    expect(claudeProvider.callClaude).toHaveBeenCalledWith(expect.any(String), undefined, undefined)
+    expect(codexProvider.callCodex).toHaveBeenCalledWith(expect.any(String), undefined, undefined)
+    expect(ollamaProvider.callOllama).toHaveBeenCalledWith(messages, 'llama3', undefined)
+    expect(apiKeyProvider.callAnthropicApi).toHaveBeenCalledWith(messages, undefined, 'test-key', undefined)
+  })
+
+  it('uses a configured provider model when the request model is omitted', async () => {
+    vi.mocked(ollamaProvider.callOllama).mockResolvedValueOnce(ollamaResponse())
+
+    await createRouter({ chain: ['ollama'], models: { ollama: 'mistral:instruct' } })
+      .complete({ messages })
+
+    expect(ollamaProvider.callOllama).toHaveBeenCalledWith(messages, 'mistral:instruct', undefined)
+  })
+
+  it('uses each provider-specific configured model for auto streaming requests', async () => {
+    vi.mocked(claudeProvider.streamClaude).mockResolvedValueOnce(claudeResponse())
+    vi.mocked(codexProvider.streamCodex).mockResolvedValueOnce({ result: 'ok', model: 'codex-config' })
+    vi.mocked(ollamaProvider.streamOllama).mockResolvedValueOnce(ollamaResponse())
+    vi.mocked(apiKeyProvider.streamAnthropicApi).mockResolvedValueOnce(apiResponse('api-config'))
+    const onDelta = vi.fn()
+
+    await createRouter({ chain: ['claude'], models: { claude: 'claude-config' } })
+      .stream({ messages, model: 'auto' }, onDelta)
+    await createRouter({ chain: ['codex'], models: { codex: 'codex-config' } })
+      .stream({ messages, model: 'auto' }, onDelta)
+    await createRouter({ chain: ['ollama'], models: { ollama: 'ollama-config' } })
+      .stream({ messages, model: 'auto' }, onDelta)
+    await createRouter({
+      chain: ['api-key'],
+      apiKeys: { anthropic: 'test-key' },
+      models: { 'api-key': 'api-config' }
+    }).stream({ messages, model: 'auto' }, onDelta)
+
+    expect(claudeProvider.streamClaude).toHaveBeenCalledWith(
+      expect.any(String), 'claude-config', expect.any(Function), undefined
+    )
+    expect(codexProvider.streamCodex).toHaveBeenCalledWith(
+      expect.any(String), 'codex-config', expect.any(Function), undefined
+    )
+    expect(ollamaProvider.streamOllama).toHaveBeenCalledWith(
+      messages, 'ollama-config', expect.any(Function), undefined
+    )
+    expect(apiKeyProvider.streamAnthropicApi).toHaveBeenCalledWith(
+      messages, 'api-config', 'test-key', expect.any(Function), undefined
+    )
+  })
+
+  it('lets an explicit request model override every configured streaming model', async () => {
+    vi.mocked(claudeProvider.streamClaude).mockResolvedValueOnce(claudeResponse())
+    vi.mocked(codexProvider.streamCodex).mockResolvedValueOnce({ result: 'ok', model: 'request-model' })
+    vi.mocked(ollamaProvider.streamOllama).mockResolvedValueOnce(ollamaResponse())
+    vi.mocked(apiKeyProvider.streamAnthropicApi).mockResolvedValueOnce(apiResponse('request-model'))
+    const onDelta = vi.fn()
+
+    await createRouter({ chain: ['claude'], models: { claude: 'configured' } })
+      .stream({ messages, model: 'request-model' }, onDelta)
+    await createRouter({ chain: ['codex'], models: { codex: 'configured' } })
+      .stream({ messages, model: 'request-model' }, onDelta)
+    await createRouter({ chain: ['ollama'], models: { ollama: 'configured' } })
+      .stream({ messages, model: 'request-model' }, onDelta)
+    await createRouter({
+      chain: ['api-key'],
+      apiKeys: { anthropic: 'test-key' },
+      models: { 'api-key': 'configured' }
+    }).stream({ messages, model: 'request-model' }, onDelta)
+
+    expect(claudeProvider.streamClaude).toHaveBeenCalledWith(
+      expect.any(String), 'request-model', expect.any(Function), undefined
+    )
+    expect(codexProvider.streamCodex).toHaveBeenCalledWith(
+      expect.any(String), 'request-model', expect.any(Function), undefined
+    )
+    expect(ollamaProvider.streamOllama).toHaveBeenCalledWith(
+      messages, 'request-model', expect.any(Function), undefined
+    )
+    expect(apiKeyProvider.streamAnthropicApi).toHaveBeenCalledWith(
+      messages, 'request-model', 'test-key', expect.any(Function), undefined
+    )
   })
 
   it('falls back from codex to ollama when codex fails before producing a response', async () => {

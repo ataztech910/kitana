@@ -103,7 +103,21 @@ describe('KitanaLlm', () => {
     expect(llm).toBeDefined()
     expect(vi.mocked(createRouter)).toHaveBeenCalledWith({
       chain: ['claude', 'codex', 'ollama', 'api-key'],
-      apiKeys: undefined
+      apiKeys: undefined,
+      models: undefined
+    })
+  })
+
+  it('passes provider-specific models to the core router', () => {
+    const models = { claude: 'sonnet', codex: 'gpt-5', ollama: 'mistral:instruct' } as const
+
+    const llm = new KitanaLlm({ model: 'auto', models })
+
+    expect(llm).toBeDefined()
+    expect(vi.mocked(createRouter)).toHaveBeenCalledWith({
+      chain: ['claude', 'codex', 'ollama', 'api-key'],
+      apiKeys: undefined,
+      models
     })
   })
 

@@ -22,7 +22,10 @@ import { KitanaLlm } from '@kitana-sdk/adk'
 
 const agent = new LlmAgent({
   name: 'hello',
-  model: new KitanaLlm({ model: 'auto' }), // default: Claude, Codex, Ollama, then API key
+  model: new KitanaLlm({
+    model: 'auto',
+    models: { ollama: 'mistral:instruct', claude: 'sonnet' }
+  }), // default chain: Claude, Codex, Ollama, then API key
   instruction: 'Be concise.'
 })
 ```
