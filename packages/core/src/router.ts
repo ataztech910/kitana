@@ -46,7 +46,7 @@ function resolveModel(req: CompleteRequest, config: RouterConfig, provider: Prov
 
 const claudeHandler: ProviderHandler = async (req, config, systemPrompt) => {
   const model = resolveModel(req, config, 'claude')
-  const claudeRes = callClaude(buildPrompt(req.messages), model, systemPrompt)
+  const claudeRes = await callClaude(buildPrompt(req.messages), model, systemPrompt)
   const usedModel = claudeRes.modelUsage
     ? Object.keys(claudeRes.modelUsage).pop() ?? model ?? 'claude-sonnet-4-6'
     : model ?? 'claude-sonnet-4-6'
@@ -81,7 +81,7 @@ const ollamaHandler: ProviderHandler = async (req, config, systemPrompt) => {
 }
 
 const codexHandler: ProviderHandler = async (req, config, systemPrompt) => {
-  const codexRes = callCodex(buildPrompt(req.messages), resolveModel(req, config, 'codex'), systemPrompt)
+  const codexRes = await callCodex(buildPrompt(req.messages), resolveModel(req, config, 'codex'), systemPrompt)
 
   return {
     content: codexRes.result,

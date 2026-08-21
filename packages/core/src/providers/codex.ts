@@ -1,7 +1,7 @@
 import { mkdtempSync, readFileSync, rmSync } from 'fs'
 import { join } from 'path'
 import { tmpdir } from 'os'
-import { isBinaryAvailable, run } from '../platform'
+import { isBinaryAvailable, run, spawnAsync } from '../platform'
 
 const NEUTRAL_CWD = tmpdir()
 
@@ -81,7 +81,7 @@ export interface CodexResponse {
   model: string
 }
 
-export function callCodex(prompt: string, model?: string, systemPrompt?: string): CodexResponse {
+export async function callCodex(prompt: string, model?: string, systemPrompt?: string): Promise<CodexResponse> {
   if (!checkCodexInstalled()) {
     throw new Error(INSTALL_INSTRUCTIONS)
   }
@@ -96,17 +96,30 @@ export function callCodex(prompt: string, model?: string, systemPrompt?: string)
   const finalPrompt = buildPrompt(prompt, systemPrompt)
 
   try {
-    const result = run('codex', codexArgs(outputFile, model), {
-      encoding: 'utf8',
-      timeout: 120000,
-      input: finalPrompt,
-      cwd: NEUTRAL_CWD
-    })
+    await new Promise<void>((resolve, reject) => {
+      const child = spawnAsync('codex', codexArgs(outputFile, model), {
+        cwd: NEUTRAL_CWD,
+        timeout: 120000
+      })
+      let stdout = ''
+      let stderr = ''
 
-    if (result.status !== 0 || result.signal) {
-      const details = [result.stdout, result.stderr, result.signal].filter(Boolean).join('\n').trim()
-      throw new Error(`Codex CLI error: ${details || `exit ${result.status}`}`)
-    }
+      child.stdout.setEncoding('utf8')
+      child.stderr.setEncoding('utf8')
+      child.stdout.on('data', (chunk: string) => { stdout += chunk })
+      child.stderr.on('data', (chunk: string) => { stderr += chunk })
+      child.on('error', reject)
+      child.on('close', (code, signal) => {
+        if (code !== 0 || signal) {
+          const details = [stdout, stderr, signal].filter(Boolean).join('\n').trim()
+          reject(new Error(`Codex CLI error: ${details || `exit ${code}`}`))
+          return
+        }
+        resolve()
+      })
+
+      child.stdin.end(finalPrompt)
+    })
 
     const text = readFileSync(outputFile, 'utf8').trim()
     return {
@@ -124,7 +137,7 @@ export async function streamCodex(
   onDelta: (text: string) => void,
   systemPrompt?: string
 ): Promise<CodexResponse> {
-  const result = callCodex(prompt, model, systemPrompt)
+  const result = await callCodex(prompt, model, systemPrompt)
   if (result.result) onDelta(result.result)
   return result
 }

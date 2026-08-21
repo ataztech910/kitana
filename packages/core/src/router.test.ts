@@ -86,7 +86,7 @@ describe('router', () => {
   })
 
   it('passes request systemPrompt through complete and stream provider channels', async () => {
-    vi.mocked(claudeProvider.callClaude).mockReturnValueOnce(claudeResponse())
+    vi.mocked(claudeProvider.callClaude).mockResolvedValueOnce(claudeResponse())
     vi.mocked(claudeProvider.streamClaude).mockResolvedValueOnce(claudeResponse())
     const router = createRouter({ chain: ['claude'] })
 
@@ -102,9 +102,7 @@ describe('router', () => {
   })
 
   it('appends fallback context to the request systemPrompt without moving it into messages', async () => {
-    vi.mocked(codexProvider.callCodex).mockImplementationOnce(() => {
-      throw new Error('Codex CLI error: unavailable')
-    })
+    vi.mocked(codexProvider.callCodex).mockRejectedValueOnce(new Error('Codex CLI error: unavailable'))
     vi.mocked(ollamaProvider.callOllama).mockResolvedValueOnce(ollamaResponse())
     const router = createRouter({
       chain: ['codex', 'ollama'],
@@ -123,8 +121,8 @@ describe('router', () => {
   })
 
   it('uses each provider-specific configured model for auto completion requests', async () => {
-    vi.mocked(claudeProvider.callClaude).mockReturnValueOnce(claudeResponse())
-    vi.mocked(codexProvider.callCodex).mockReturnValueOnce({ result: 'ok', model: 'codex-config' })
+    vi.mocked(claudeProvider.callClaude).mockResolvedValueOnce(claudeResponse())
+    vi.mocked(codexProvider.callCodex).mockResolvedValueOnce({ result: 'ok', model: 'codex-config' })
     vi.mocked(ollamaProvider.callOllama).mockResolvedValueOnce(ollamaResponse())
     vi.mocked(apiKeyProvider.callAnthropicApi).mockResolvedValueOnce(apiResponse('api-config'))
 
@@ -147,8 +145,8 @@ describe('router', () => {
   })
 
   it('lets an explicit request model override every configured completion model', async () => {
-    vi.mocked(claudeProvider.callClaude).mockReturnValueOnce(claudeResponse())
-    vi.mocked(codexProvider.callCodex).mockReturnValueOnce({ result: 'ok', model: 'request-model' })
+    vi.mocked(claudeProvider.callClaude).mockResolvedValueOnce(claudeResponse())
+    vi.mocked(codexProvider.callCodex).mockResolvedValueOnce({ result: 'ok', model: 'request-model' })
     vi.mocked(ollamaProvider.callOllama).mockResolvedValueOnce(ollamaResponse())
     vi.mocked(apiKeyProvider.callAnthropicApi).mockResolvedValueOnce(apiResponse('request-model'))
 
@@ -171,8 +169,8 @@ describe('router', () => {
   })
 
   it('keeps every current provider default when no configured model is provided', async () => {
-    vi.mocked(claudeProvider.callClaude).mockReturnValueOnce(claudeResponse())
-    vi.mocked(codexProvider.callCodex).mockReturnValueOnce({ result: 'ok', model: 'codex' })
+    vi.mocked(claudeProvider.callClaude).mockResolvedValueOnce(claudeResponse())
+    vi.mocked(codexProvider.callCodex).mockResolvedValueOnce({ result: 'ok', model: 'codex' })
     vi.mocked(ollamaProvider.callOllama).mockResolvedValueOnce(ollamaResponse())
     vi.mocked(apiKeyProvider.callAnthropicApi).mockResolvedValueOnce(apiResponse('claude-sonnet-4-6'))
 
@@ -195,6 +193,44 @@ describe('router', () => {
       .complete({ messages })
 
     expect(ollamaProvider.callOllama).toHaveBeenCalledWith(messages, 'mistral:instruct', undefined)
+  })
+
+  it('starts concurrent Claude completions before either one resolves', async () => {
+    const resolvers: Array<(value: ReturnType<typeof claudeResponse>) => void> = []
+    const started: string[] = []
+    vi.mocked(claudeProvider.callClaude).mockImplementation(prompt => {
+      started.push(prompt)
+      return new Promise(resolve => { resolvers.push(resolve) })
+    })
+    const router = createRouter({ chain: ['claude'] })
+
+    const first = router.complete({ messages: [{ role: 'user', content: 'first' }] })
+    const second = router.complete({ messages: [{ role: 'user', content: 'second' }] })
+
+    expect(started).toHaveLength(2)
+    expect(resolvers).toHaveLength(2)
+    resolvers[0](claudeResponse())
+    resolvers[1](claudeResponse())
+    await expect(Promise.all([first, second])).resolves.toHaveLength(2)
+  })
+
+  it('starts concurrent Codex completions before either one resolves', async () => {
+    const resolvers: Array<(value: { result: string; model: string }) => void> = []
+    const started: string[] = []
+    vi.mocked(codexProvider.callCodex).mockImplementation(prompt => {
+      started.push(prompt)
+      return new Promise(resolve => { resolvers.push(resolve) })
+    })
+    const router = createRouter({ chain: ['codex'] })
+
+    const first = router.complete({ messages: [{ role: 'user', content: 'first' }] })
+    const second = router.complete({ messages: [{ role: 'user', content: 'second' }] })
+
+    expect(started).toHaveLength(2)
+    expect(resolvers).toHaveLength(2)
+    resolvers[0]({ result: 'first done', model: 'codex' })
+    resolvers[1]({ result: 'second done', model: 'codex' })
+    await expect(Promise.all([first, second])).resolves.toHaveLength(2)
   })
 
   it('uses each provider-specific configured model for auto streaming requests', async () => {
@@ -264,9 +300,7 @@ describe('router', () => {
   })
 
   it('falls back from codex to ollama when codex fails before producing a response', async () => {
-    vi.mocked(codexProvider.callCodex).mockImplementationOnce(() => {
-      throw new Error('Codex CLI error: network unavailable')
-    })
+    vi.mocked(codexProvider.callCodex).mockRejectedValueOnce(new Error('Codex CLI error: network unavailable'))
     vi.mocked(ollamaProvider.callOllama).mockResolvedValueOnce({
       choices: [{ message: { content: 'fallback via ollama' } }],
       usage: { prompt_tokens: 1, completion_tokens: 2, total_tokens: 3 }

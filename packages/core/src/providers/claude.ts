@@ -16,14 +16,17 @@ const NEUTRAL_CWD = tmpdir()
 const DISALLOWED_TOOLS =
   'Bash Read Write Edit Glob Grep WebFetch WebSearch NotebookEdit Task TodoWrite'
 
-function withSystemPromptFile<T>(systemPrompt: string | undefined, fn: (extraArgs: string[]) => T): T {
+async function withSystemPromptFile<T>(
+  systemPrompt: string | undefined,
+  fn: (extraArgs: string[]) => Promise<T>
+): Promise<T> {
   if (!systemPrompt) return fn([])
 
   const file = join(tmpdir(), `kitana-system-prompt-${process.pid}-${Math.random().toString(36).slice(2)}.txt`)
   writeFileSync(file, systemPrompt, 'utf8')
 
   try {
-    return fn(['--append-system-prompt-file', file])
+    return await fn(['--append-system-prompt-file', file])
   } finally {
     try { unlinkSync(file) } catch { /* best effort cleanup */ }
   }
@@ -118,12 +121,12 @@ export function ensureClaudeLoggedIn(): boolean {
   return checkClaudeAuth().loggedIn
 }
 
-export function callClaude(prompt: string, model?: string, systemPrompt?: string): ClaudeResponse {
+export async function callClaude(prompt: string, model?: string, systemPrompt?: string): Promise<ClaudeResponse> {
   if (!checkClaudeInstalled()) {
     throw new Error(INSTALL_INSTRUCTIONS)
   }
 
-  return withSystemPromptFile(systemPrompt, extraArgs => {
+  return withSystemPromptFile(systemPrompt, extraArgs => new Promise((resolve, reject) => {
     const args = [
       '-p', '--output-format', 'json',
       '--disallowedTools', DISALLOWED_TOOLS,
@@ -134,22 +137,32 @@ export function callClaude(prompt: string, model?: string, systemPrompt?: string
       args.push('--model', model)
     }
 
-    // Prompt goes via stdin, not as a CLI argument — a positional argument
-    // containing newlines gets mangled by cmd.exe's line-based command parsing
-    // on Windows (silently truncates/empties the argument).
-    const result = run('claude', args, {
-      encoding: 'utf8',
-      timeout: 30000,
-      input: prompt,
-      cwd: NEUTRAL_CWD
+    const child = spawnAsync('claude', args, { cwd: NEUTRAL_CWD, timeout: 30000 })
+    let stdout = ''
+    let stderr = ''
+
+    child.stdout.setEncoding('utf8')
+    child.stderr.setEncoding('utf8')
+    child.stdout.on('data', (chunk: string) => { stdout += chunk })
+    child.stderr.on('data', (chunk: string) => { stderr += chunk })
+    child.on('error', reject)
+    child.on('close', (code, signal) => {
+      if (code !== 0 || signal) {
+        reject(new Error(`Claude CLI error: ${stderr.trim() || signal || `exit ${code}`}`))
+        return
+      }
+
+      try {
+        resolve(JSON.parse(stdout) as ClaudeResponse)
+      } catch (error) {
+        reject(new Error(`Claude CLI returned invalid JSON: ${error instanceof Error ? error.message : String(error)}`))
+      }
     })
 
-    if (result.status !== 0 || result.signal) {
-      throw new Error(`Claude CLI error: ${result.stderr || result.signal}`)
-    }
-
-    return JSON.parse(result.stdout)
-  })
+    // Prompt goes via stdin, not as a CLI argument — a positional argument
+    // containing newlines gets mangled by cmd.exe's line-based command parsing.
+    child.stdin.end(prompt)
+  }))
 }
 
 interface StreamJsonEvent {
