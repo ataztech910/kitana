@@ -224,7 +224,6 @@ export class KitanaLlm extends BaseLlm {
       systemText,
       toolsEnabled ? toolCallingInstructions(declarations) : undefined
     ].filter((value): value is string => Boolean(value)).join('\n\n')
-    if (combinedSystemText) messages.push({ role: 'system', content: combinedSystemText })
 
     messages.push(...contentsToMessages(llmRequest.contents))
 
@@ -243,7 +242,11 @@ export class KitanaLlm extends BaseLlm {
     // least one event no matter what.
     if (!stream || toolsEnabled) {
       try {
-        const response = await this.router.complete({ messages, model: downstreamModel })
+        const response = await this.router.complete({
+          messages,
+          model: downstreamModel,
+          systemPrompt: combinedSystemText || undefined
+        })
         const functionCall = toolsEnabled ? parseToolCall(response.content, toolNames) : undefined
         yield {
           content: {
@@ -273,7 +276,11 @@ export class KitanaLlm extends BaseLlm {
     const channel = new AsyncChannel<LlmResponse>()
 
     this.router
-      .stream({ messages, model: downstreamModel }, text => {
+      .stream({
+        messages,
+        model: downstreamModel,
+        systemPrompt: combinedSystemText || undefined
+      }, text => {
         channel.push({
           content: { role: 'model', parts: [{ text }] },
           partial: true,

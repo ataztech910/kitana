@@ -85,6 +85,43 @@ describe('router', () => {
     ).rejects.toThrow(/No API key configured/)
   })
 
+  it('passes request systemPrompt through complete and stream provider channels', async () => {
+    vi.mocked(claudeProvider.callClaude).mockReturnValueOnce(claudeResponse())
+    vi.mocked(claudeProvider.streamClaude).mockResolvedValueOnce(claudeResponse())
+    const router = createRouter({ chain: ['claude'] })
+
+    await router.complete({ messages, systemPrompt: 'trusted system instructions' })
+    await router.stream({ messages, systemPrompt: 'trusted system instructions' }, vi.fn())
+
+    expect(claudeProvider.callClaude).toHaveBeenCalledWith(
+      expect.any(String), undefined, 'trusted system instructions'
+    )
+    expect(claudeProvider.streamClaude).toHaveBeenCalledWith(
+      expect.any(String), undefined, expect.any(Function), 'trusted system instructions'
+    )
+  })
+
+  it('appends fallback context to the request systemPrompt without moving it into messages', async () => {
+    vi.mocked(codexProvider.callCodex).mockImplementationOnce(() => {
+      throw new Error('Codex CLI error: unavailable')
+    })
+    vi.mocked(ollamaProvider.callOllama).mockResolvedValueOnce(ollamaResponse())
+    const router = createRouter({
+      chain: ['codex', 'ollama'],
+      onProviderSwitch: async () => 'fallback context'
+    })
+
+    await router.complete({ messages, systemPrompt: 'base instructions' })
+
+    expect(codexProvider.callCodex).toHaveBeenCalledWith(
+      expect.any(String), undefined, 'base instructions'
+    )
+    expect(ollamaProvider.callOllama).toHaveBeenCalledWith(
+      messages, 'llama3', 'base instructions\n\nfallback context'
+    )
+    expect(messages).toEqual([{ role: 'user', content: 'hi' }])
+  })
+
   it('uses each provider-specific configured model for auto completion requests', async () => {
     vi.mocked(claudeProvider.callClaude).mockReturnValueOnce(claudeResponse())
     vi.mocked(codexProvider.callCodex).mockReturnValueOnce({ result: 'ok', model: 'codex-config' })

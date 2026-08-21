@@ -24,7 +24,8 @@ const router = createRouter({
 
 const response = await router.complete({
   messages: [{ role: 'user', content: 'Hello' }],
-  model: 'auto'
+  model: 'auto',
+  systemPrompt: 'Answer concisely.'
 })
 // { content, model, provider, usage }
 ```

@@ -224,7 +224,7 @@ async function walkChain<T>(
   req: CompleteRequest,
   attempt: (provider: ProviderName, systemPrompt: string | undefined) => Promise<T>
 ): Promise<T> {
-  let systemPrompt: string | undefined
+  let systemPrompt: string | undefined = req.systemPrompt
   let lastError: Error | undefined
 
   for (let i = 0; i < config.chain.length; i++) {

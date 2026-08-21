@@ -1,6 +1,6 @@
 {
   "name": "@kitana-sdk/core",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "Router, provider detection, and failover for AI CLI subscriptions (Claude, Codex, Ollama) — no API keys required.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

@@ -8,6 +8,7 @@ export interface Message {
 export interface CompleteRequest {
   messages: Message[]
   model?: string
+  systemPrompt?: string
 }
 
 export interface CompleteResponse {

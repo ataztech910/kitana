@@ -121,7 +121,7 @@ describe('KitanaLlm', () => {
     })
   })
 
-  it('sends the system instruction as a leading system message', async () => {
+  it('sends the system instruction through the dedicated systemPrompt field', async () => {
     completeMock.mockResolvedValueOnce(fakeResponse('ok'))
     const llm = new KitanaLlm({ model: 'auto' })
 
@@ -133,11 +133,9 @@ describe('KitanaLlm', () => {
     for await (const chunk of llm.generateContentAsync(request)) results.push(chunk)
 
     expect(completeMock).toHaveBeenCalledWith({
-      messages: [
-        { role: 'system', content: 'Be concise.' },
-        { role: 'user', content: 'hi' }
-      ],
-      model: 'auto'
+      messages: [{ role: 'user', content: 'hi' }],
+      model: 'auto',
+      systemPrompt: 'Be concise.'
     })
     expect(results).toEqual([
       {
@@ -173,11 +171,12 @@ describe('KitanaLlm', () => {
     }
 
     const request = completeMock.mock.calls[0]?.[0]
-    const systemMessage = request?.messages.find(message => message.role === 'system')
-    expect(systemMessage?.content).toContain('getWeather')
-    expect(systemMessage?.content).toContain('Returns the current weather for a city.')
-    expect(systemMessage?.content).toContain('"required": [')
-    expect(systemMessage?.content).toContain('{"tool_call":{"name":"имя_инструмента","args":{}}}')
+    expect(request?.messages).toEqual([{ role: 'user', content: 'hi' }])
+    expect(request?.messages.some(message => message.role === 'system')).toBe(false)
+    expect(request?.systemPrompt).toContain('getWeather')
+    expect(request?.systemPrompt).toContain('Returns the current weather for a city.')
+    expect(request?.systemPrompt).toContain('"required": [')
+    expect(request?.systemPrompt).toContain('{"tool_call":{"name":"имя_инструмента","args":{}}}')
   })
 
   it('converts tool-call JSON into an ADK functionCall part', async () => {
@@ -309,6 +308,23 @@ describe('KitanaLlm', () => {
         customMetadata: { kitanaProvider: 'claude' }
       }
     ])
+  })
+
+  it('keeps streaming system instructions out of conversation messages', async () => {
+    streamMock.mockResolvedValueOnce(fakeResponse('Hello'))
+    const llm = new KitanaLlm({ model: 'auto' })
+
+    for await (const _ of llm.generateContentAsync(fakeRequest({
+      config: { systemInstruction: 'Be concise.' }
+    }), true)) {
+      /* drain */
+    }
+
+    expect(streamMock).toHaveBeenCalledWith({
+      messages: [{ role: 'user', content: 'hi' }],
+      model: 'auto',
+      systemPrompt: 'Be concise.'
+    }, expect.any(Function))
   })
 
   it('yields an error event instead of throwing when streaming fails', async () => {
