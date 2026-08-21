@@ -22,7 +22,7 @@ import { KitanaLlm } from '@kitana-sdk/adk'
 
 const agent = new LlmAgent({
   name: 'hello',
-  model: new KitanaLlm({ model: 'auto' }), // or: chain: ['claude', 'ollama', 'api-key']
+  model: new KitanaLlm({ model: 'auto' }), // default: Claude, Codex, Ollama, then API key
   instruction: 'Be concise.'
 })
 ```
@@ -35,12 +35,16 @@ import '@kitana-sdk/adk' // registers the resolver
 const agent = new LlmAgent({ model: 'kitana/auto', ... })
 ```
 
+## Function tools
+
+ADK `FunctionTool` declarations are exposed to every Kitana provider through a
+text-based JSON protocol. Kitana converts a valid provider response into an ADK
+`functionCall` part; ADK's `Runner` executes the tool and sends the resulting
+`functionResponse` back on the next turn. Tool-enabled requests are buffered and
+returned as one complete event, even when ADK requests streaming.
+
 ## Known limitations
 
-- **No streaming.** `@kitana-sdk/core`'s `router.complete()` is a single non-streaming
-  call. `providers/claude.ts` already has a `streamClaude()` implementation, but it
-  isn't wired through the router yet — `generateContentAsync` always yields exactly
-  one full response regardless of the `stream` flag ADK passes.
 - **No live/bidi.** `connect()` throws — Kitana has no equivalent of a live voice session.
 
 See `examples/failover-claude-to-ollama.cjs` for a runnable end-to-end example

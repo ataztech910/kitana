@@ -1,4 +1,4 @@
-import { ClaudeDetectResult, DetectResult, OllamaDetectResult } from './types'
+import { ClaudeDetectResult, CodexDetectResult, DetectResult, OllamaDetectResult } from './types'
 import { isBinaryAvailable, run } from './platform'
 
 async function detectClaude(): Promise<ClaudeDetectResult> {
@@ -49,6 +49,33 @@ async function detectOllama(): Promise<OllamaDetectResult> {
   return { available, running: false, models: [] }
 }
 
+async function detectCodex(): Promise<CodexDetectResult> {
+  const available = isBinaryAvailable('codex')
+
+  if (!available) {
+    return { available: false, auth: { loggedIn: false, mode: null } }
+  }
+
+  const versionResult = run('codex', ['--version'], { encoding: 'utf8', timeout: 10000 })
+  const version = versionResult.status === 0 ? `${versionResult.stdout}${versionResult.stderr}`.trim() : undefined
+
+  const authResult = run('codex', ['login', 'status'], { encoding: 'utf8', timeout: 10000 })
+  const authText = `${authResult.stdout ?? ''}\n${authResult.stderr ?? ''}`
+
+  let auth: CodexDetectResult['auth'] = { loggedIn: false, mode: null }
+  if (authResult.status === 0) {
+    if (/logged in using chatgpt/i.test(authText)) {
+      auth = { loggedIn: true, mode: 'chatgpt' }
+    } else if (/logged in using api key/i.test(authText)) {
+      auth = { loggedIn: true, mode: 'api-key' }
+    } else if (/logged in/i.test(authText)) {
+      auth = { loggedIn: true, mode: 'unknown' }
+    }
+  }
+
+  return { available: true, version, auth }
+}
+
 async function pingHttp(url: string): Promise<boolean> {
   try {
     const res = await fetch(url, { signal: AbortSignal.timeout(2000) })
@@ -59,8 +86,9 @@ async function pingHttp(url: string): Promise<boolean> {
 }
 
 export async function detect(): Promise<DetectResult> {
-  const [claude, ollama, lmstudio] = await Promise.all([
+  const [claude, codex, ollama, lmstudio] = await Promise.all([
     detectClaude(),
+    detectCodex(),
     detectOllama(),
     pingHttp('http://localhost:1234')
   ])
@@ -68,10 +96,10 @@ export async function detect(): Promise<DetectResult> {
   return {
     providers: {
       claude,
+      codex,
       ollama,
       openai: { available: false },
-      gemini: { available: false },
-      codex: { available: isBinaryAvailable('codex') }
+      gemini: { available: false }
     },
     httpServers: {
       ollama: { running: ollama.running, url: 'http://localhost:11434' },

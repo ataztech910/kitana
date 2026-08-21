@@ -1,6 +1,6 @@
 import { BaseLlm, LLMRegistry } from '@google/adk'
 import type { BaseLlmConnection, LlmRequest, LlmResponse } from '@google/adk'
-import type { Content, ContentUnion, Part } from '@google/genai'
+import type { Content, ContentUnion, FunctionCall, FunctionDeclaration, Part } from '@google/genai'
 import { createRouter } from '@kitana-sdk/core'
 import type { Message, ProviderName, RouterConfig } from '@kitana-sdk/core'
 
@@ -8,6 +8,89 @@ const MODEL_PREFIX = 'kitana/'
 
 function partText(part: Part): string {
   return typeof part.text === 'string' ? part.text : ''
+}
+
+function partToMessageText(part: Part): string {
+  if (typeof part.text === 'string') return part.text
+
+  if (part.functionCall?.name) {
+    return `Вызов инструмента ${part.functionCall.name}: ${JSON.stringify(part.functionCall.args ?? {})}`
+  }
+
+  if (part.functionResponse?.name) {
+    return `Результат вызова ${part.functionResponse.name}: ${JSON.stringify(part.functionResponse.response ?? {})}`
+  }
+
+  return ''
+}
+
+function toolCallingInstructions(declarations: FunctionDeclaration[]): string {
+  return [
+    'Доступные инструменты (JSON Schema):',
+    JSON.stringify(declarations, null, 2),
+    '',
+    'Если нужно вызвать инструмент, ответь ТОЛЬКО валидным JSON без markdown и пояснений:',
+    '{"tool_call":{"name":"имя_инструмента","args":{}}}',
+    'Используй только перечисленные инструменты и передавай args согласно их JSON Schema.',
+    'Если инструмент не нужен, ответь обычным текстом.'
+  ].join('\n')
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function jsonObjectCandidates(text: string): string[] {
+  const trimmed = text.trim()
+  const fenced = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i)
+  const source = fenced?.[1]?.trim() ?? trimmed
+  const candidates = [source]
+  let depth = 0
+  let start = -1
+  let inString = false
+  let escaped = false
+
+  for (let index = 0; index < source.length; index += 1) {
+    const char = source[index]
+
+    if (inString) {
+      if (escaped) escaped = false
+      else if (char === '\\') escaped = true
+      else if (char === '"') inString = false
+      continue
+    }
+
+    if (char === '"') {
+      inString = true
+    } else if (char === '{') {
+      if (depth === 0) start = index
+      depth += 1
+    } else if (char === '}' && depth > 0) {
+      depth -= 1
+      if (depth === 0 && start >= 0) candidates.push(source.slice(start, index + 1))
+    }
+  }
+
+  return [...new Set(candidates)]
+}
+
+export function parseToolCall(text: string, allowedNames: ReadonlySet<string>): FunctionCall | undefined {
+  for (const candidate of jsonObjectCandidates(text)) {
+    try {
+      const parsed: unknown = JSON.parse(candidate)
+      if (!isRecord(parsed) || !isRecord(parsed.tool_call)) continue
+
+      const name = parsed.tool_call.name
+      const args = parsed.tool_call.args
+      if (typeof name !== 'string' || !allowedNames.has(name) || !isRecord(args)) continue
+
+      return { name, args }
+    } catch {
+      // Provider output is untrusted text; malformed JSON is a normal text response.
+    }
+  }
+
+  return undefined
 }
 
 // Bridges router.stream()'s push-style onDelta callback into the pull-style
@@ -72,7 +155,7 @@ export function extractText(value: ContentUnion | undefined): string | undefined
 export function contentsToMessages(contents: Content[]): Message[] {
   return contents.map(c => ({
     role: c.role === 'model' ? 'assistant' : 'user',
-    content: (c.parts ?? []).map(partText).join('')
+    content: (c.parts ?? []).map(partToMessageText).filter(Boolean).join('\n')
   }))
 }
 
@@ -83,7 +166,7 @@ export interface KitanaLlmParams {
    * matches when a bare string is passed to LlmAgent (e.g. model: "kitana/auto").
    */
   model: string
-  /** Provider failover order. Defaults to the same chain @kitana-sdk/core defaults to. */
+  /** Provider failover order. Defaults to Claude -> Codex -> Ollama -> API key. */
   chain?: ProviderName[]
   apiKeys?: RouterConfig['apiKeys']
 }
@@ -112,7 +195,7 @@ export class KitanaLlm extends BaseLlm {
       ? params.model.slice(MODEL_PREFIX.length)
       : params.model
     this.router = createRouter({
-      chain: params.chain ?? ['claude', 'ollama', 'api-key'],
+      chain: params.chain ?? ['claude', 'codex', 'ollama', 'api-key'],
       apiKeys: params.apiKeys
     })
   }
@@ -125,7 +208,20 @@ export class KitanaLlm extends BaseLlm {
     const messages: Message[] = []
 
     const systemText = extractText(llmRequest.config?.systemInstruction)
-    if (systemText) messages.push({ role: 'system', content: systemText })
+    const declarations = Object.values(llmRequest.toolsDict ?? {})
+      .map(tool => tool._getDeclaration())
+      .filter((declaration): declaration is FunctionDeclaration => declaration !== undefined)
+    const toolNames = new Set(
+      declarations
+        .map(declaration => declaration.name)
+        .filter((name): name is string => typeof name === 'string')
+    )
+    const toolsEnabled = declarations.length > 0
+    const combinedSystemText = [
+      systemText,
+      toolsEnabled ? toolCallingInstructions(declarations) : undefined
+    ].filter((value): value is string => Boolean(value)).join('\n\n')
+    if (combinedSystemText) messages.push({ role: 'system', content: combinedSystemText })
 
     messages.push(...contentsToMessages(llmRequest.contents))
 
@@ -142,11 +238,15 @@ export class KitanaLlm extends BaseLlm {
     // ataztech910/kitana#<workshop-debug>). Catch here and always yield a
     // response — either real content or an explicit error — so callers get at
     // least one event no matter what.
-    if (!stream) {
+    if (!stream || toolsEnabled) {
       try {
         const response = await this.router.complete({ messages, model: downstreamModel })
+        const functionCall = toolsEnabled ? parseToolCall(response.content, toolNames) : undefined
         yield {
-          content: { role: 'model', parts: [{ text: response.content }] },
+          content: {
+            role: 'model',
+            parts: [functionCall ? { functionCall } : { text: response.content }]
+          },
           turnComplete: true,
           partial: false,
           customMetadata: { kitanaProvider: response.provider }

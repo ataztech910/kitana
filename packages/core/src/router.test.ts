@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { createRouter } from './router'
 import * as claudeProvider from './providers/claude'
+import * as codexProvider from './providers/codex'
 import * as ollamaProvider from './providers/ollama'
 
 vi.mock('./providers/claude', async () => {
@@ -10,7 +11,12 @@ vi.mock('./providers/claude', async () => {
 
 vi.mock('./providers/ollama', async () => {
   const actual = await vi.importActual<typeof import('./providers/ollama')>('./providers/ollama')
-  return { ...actual, streamOllama: vi.fn() }
+  return { ...actual, callOllama: vi.fn(), streamOllama: vi.fn() }
+})
+
+vi.mock('./providers/codex', async () => {
+  const actual = await vi.importActual<typeof import('./providers/codex')>('./providers/codex')
+  return { ...actual, streamCodex: vi.fn(), callCodex: vi.fn() }
 })
 
 describe('router', () => {
@@ -38,6 +44,22 @@ describe('router', () => {
     await expect(
       router.complete({ messages: [{ role: 'user', content: 'hi' }] })
     ).rejects.toThrow(/No API key configured/)
+  })
+
+  it('falls back from codex to ollama when codex fails before producing a response', async () => {
+    vi.mocked(codexProvider.callCodex).mockImplementationOnce(() => {
+      throw new Error('Codex CLI error: network unavailable')
+    })
+    vi.mocked(ollamaProvider.callOllama).mockResolvedValueOnce({
+      choices: [{ message: { content: 'fallback via ollama' } }],
+      usage: { prompt_tokens: 1, completion_tokens: 2, total_tokens: 3 }
+    })
+
+    const router = createRouter({ chain: ['codex', 'ollama'] })
+    const result = await router.complete({ messages: [{ role: 'user', content: 'hi' }] })
+
+    expect(result.provider).toBe('ollama')
+    expect(result.content).toBe('fallback via ollama')
   })
 
   it('stream() falls back to the next provider when the first fails before emitting anything', async () => {

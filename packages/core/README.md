@@ -14,10 +14,10 @@ npm install @kitana-sdk/core
 import { createRouter, detect } from '@kitana-sdk/core'
 
 const env = await detect()
-// { providers: { claude: { available, auth: { loggedIn, subscriptionType } }, ollama: {...} }, ... }
+// { providers: { claude: {...}, codex: { available, auth: {...} }, ollama: {...} }, ... }
 
 const router = createRouter({
-  chain: ['claude', 'ollama', 'api-key'],
+  chain: ['claude', 'codex', 'ollama', 'api-key'],
   apiKeys: { anthropic: process.env.ANTHROPIC_API_KEY }
 })
 
@@ -54,6 +54,7 @@ const router = createRouter({
 ## Requirements
 
 - Claude CLI (`npm install -g @anthropic-ai/claude-code`), authenticated via `claude auth login`
+- Codex CLI (`npm install -g @openai/codex`), authenticated via `codex login`
 - Optionally: Ollama running locally, or an Anthropic/OpenAI API key for fallback
 
 See the [main repo](https://github.com/ataztech910/kitana) for full documentation.

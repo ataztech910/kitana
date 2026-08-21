@@ -1,6 +1,7 @@
 export * from './types'
 export * from './detector'
 export * from './providers/claude'
+export * from './providers/codex'
 export * from './providers/ollama'
 export * from './providers/apiKey'
 export * from './router'

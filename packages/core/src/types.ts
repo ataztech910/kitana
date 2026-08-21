@@ -1,4 +1,4 @@
-export type ProviderName = 'claude' | 'ollama' | 'api-key'
+export type ProviderName = 'claude' | 'codex' | 'ollama' | 'api-key'
 
 export interface Message {
   role: string
@@ -38,13 +38,22 @@ export interface OllamaDetectResult {
   models: string[]
 }
 
+export interface CodexDetectResult {
+  available: boolean
+  version?: string
+  auth: {
+    loggedIn: boolean
+    mode: 'chatgpt' | 'api-key' | 'unknown' | null
+  }
+}
+
 export interface DetectResult {
   providers: {
     claude: ClaudeDetectResult
+    codex: CodexDetectResult
     ollama: OllamaDetectResult
     openai: { available: boolean }
     gemini: { available: boolean }
-    codex: { available: boolean }
   }
   httpServers: {
     ollama: { running: boolean; url: string }

@@ -1,5 +1,6 @@
 import { CompleteRequest, CompleteResponse, Message, ProviderName } from './types'
 import { callClaude, streamClaude } from './providers/claude'
+import { callCodex, streamCodex } from './providers/codex'
 import { callOllama, streamOllama } from './providers/ollama'
 import { callAnthropicApi, callOpenAiApi, streamAnthropicApi, streamOpenAiApi } from './providers/apiKey'
 
@@ -69,6 +70,21 @@ const ollamaHandler: ProviderHandler = async (req, _config, systemPrompt) => {
   }
 }
 
+const codexHandler: ProviderHandler = async (req, _config, systemPrompt) => {
+  const codexRes = callCodex(buildPrompt(req.messages), req.model, systemPrompt)
+
+  return {
+    content: codexRes.result,
+    model: codexRes.model,
+    provider: 'codex',
+    usage: {
+      promptTokens: 0,
+      completionTokens: 0,
+      totalTokens: 0
+    }
+  }
+}
+
 const apiKeyHandler: ProviderHandler = async (req, config, systemPrompt) => {
   const anthropicKey = config.apiKeys?.anthropic ?? process.env.ANTHROPIC_API_KEY
   const openaiKey = config.apiKeys?.openai ?? process.env.OPENAI_API_KEY
@@ -88,6 +104,7 @@ const apiKeyHandler: ProviderHandler = async (req, config, systemPrompt) => {
 
 const PROVIDER_HANDLERS: Record<ProviderName, ProviderHandler> = {
   claude: claudeHandler,
+  codex: codexHandler,
   ollama: ollamaHandler,
   'api-key': apiKeyHandler
 }
@@ -134,6 +151,21 @@ const ollamaStreamHandler: StreamProviderHandler = async (req, _config, systemPr
   }
 }
 
+const codexStreamHandler: StreamProviderHandler = async (req, _config, systemPrompt, onDelta) => {
+  const codexRes = await streamCodex(buildPrompt(req.messages), req.model, onDelta, systemPrompt)
+
+  return {
+    content: codexRes.result,
+    model: codexRes.model,
+    provider: 'codex',
+    usage: {
+      promptTokens: 0,
+      completionTokens: 0,
+      totalTokens: 0
+    }
+  }
+}
+
 const apiKeyStreamHandler: StreamProviderHandler = async (req, config, systemPrompt, onDelta) => {
   const anthropicKey = config.apiKeys?.anthropic ?? process.env.ANTHROPIC_API_KEY
   const openaiKey = config.apiKeys?.openai ?? process.env.OPENAI_API_KEY
@@ -153,6 +185,7 @@ const apiKeyStreamHandler: StreamProviderHandler = async (req, config, systemPro
 
 const STREAM_PROVIDER_HANDLERS: Record<ProviderName, StreamProviderHandler> = {
   claude: claudeStreamHandler,
+  codex: codexStreamHandler,
   ollama: ollamaStreamHandler,
   'api-key': apiKeyStreamHandler
 }
