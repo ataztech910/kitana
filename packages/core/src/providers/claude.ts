@@ -137,7 +137,7 @@ export async function callClaude(prompt: string, model?: string, systemPrompt?: 
       args.push('--model', model)
     }
 
-    const child = spawnAsync('claude', args, { cwd: NEUTRAL_CWD, timeout: 30000 })
+    const child = spawnAsync('claude', args, { cwd: NEUTRAL_CWD, timeout: 120000 })
     let stdout = ''
     let stderr = ''
 

@@ -35,12 +35,14 @@ describe('callClaude', () => {
 
     const pending = callClaude('hello', undefined, 'trusted instructions')
     const args = vi.mocked(platform.spawnAsync).mock.calls[0]?.[1] ?? []
+    const options = vi.mocked(platform.spawnAsync).mock.calls[0]?.[2]
     const flagIndex = args.indexOf('--append-system-prompt-file')
     const promptFile = args[flagIndex + 1]
 
     expect(flagIndex).toBeGreaterThanOrEqual(0)
     expect(promptFile).toBeDefined()
     expect(existsSync(promptFile)).toBe(true)
+    expect(options).toMatchObject({ timeout: 120000 })
     expect(child.stdin.end).toHaveBeenCalledWith('hello')
 
     child.stdout.emit('data', JSON.stringify({
