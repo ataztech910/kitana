@@ -32,3 +32,61 @@
 хардкодят похожий, тоже не совпадающий список. Для альфа-версии — приемлемое
 упрощение, не приоритет. Если руки дойдут — либо обновить список вручную,
 либо (лучше) не хардкодить, а спрашивать `claude` CLI напрямую.
+
+## 2026-08-31: streaming для tool-enabled запросов в `KitanaLlm`
+
+**Файлы:** `packages/adk/src/KitanaLlm.ts`, `packages/core/src/router.ts`,
+`packages/core/src/providers/{claude,codex,ollama,apiKey}.ts`
+
+**Текущее ограничение:** `KitanaLlm.generateContentAsync()` при наличии хотя бы
+одного ADK-инструмента всегда вызывает `router.complete()`, даже если ADK передал
+`stream=true`. Поэтому буферизуется не только JSON-вызов инструмента, но и обычный
+текстовый ответ модели после выполнения инструмента.
+
+**Почему так сделано:** function calling реализован текстовым протоколом. Модель
+либо отвечает обычным текстом, либо возвращает JSON
+`{"tool_call":{"name":"...","args":{...}}}`. Текущий `parseToolCall()` определяет
+тип ответа только после получения полного текста.
+
+**Что уже проверено:**
+
+- Claude CLI реально стримит через `stream-json --include-partial-messages`.
+- Ollama, Anthropic API и OpenAI API отдают настоящие text deltas.
+- `streamCodex()` сейчас не является настоящим streaming: ждёт завершения
+  `callCodex()` и затем отдаёт весь ответ одним `onDelta()`.
+- ADK допускает partial text events и последующий завершённый event с
+  `functionCall`; partial events не сохраняются в истории session.
+- `router.stream()` запрещает fallback после первого provider delta. Это важно,
+  даже если `KitanaLlm` ещё не показал delta пользователю, а держит его в своём
+  классификаторе.
+
+**Предлагаемый вариант:** добавить опциональный режим
+`toolStreaming: "buffered" | "detect"`. Сохранить `buffered` как совместимый
+режим, а в `detect` вызывать `router.stream()` и классифицировать начало ответа:
+
+1. Обычный текст начинать отдавать в ADK сразу.
+2. Ответ, начинающийся с `{` или markdown JSON fence, буферизовать полностью.
+3. После завершения валидный разрешённый tool-call преобразовать в
+   `functionCall`; нераспознанный JSON вернуть как обычный текст.
+4. Для streaming-режима принимать tool call только как самостоятельный JSON или
+   fenced JSON. Не пытаться находить JSON внутри уже показанного обычного текста,
+   поскольку отправленные deltas невозможно отозвать.
+
+**Статусы для UI:** не отправлять `provider: ...` как модельный текст. Добавить
+отдельный `onStatus`/telemetry callback для событий `provider.started`,
+`provider.failed`, `toolCall.detected`. Этот же канал позднее использовать в
+`@kitana-sdk/tracker`.
+
+**Что решить 2026-08-31:**
+
+- Оставить ли `buffered` режимом по умолчанию или сразу включить `detect`.
+- Приемлемо ли документировать отсутствие fallback после начала streaming, либо
+  расширять контракт router callback подтверждением реально опубликованного delta.
+- Делать ли отдельную доработку Codex `--json`, учитывая, что JSONL lifecycle
+  events не гарантируют token-level deltas.
+- Нужны ли status events в этом же релизе или вместе с будущим tracker.
+
+**Критерий готовности:** через Claude, Ollama и API-key обычный текстовый ответ при
+наличии tools приходит partial events; чистый tool-call JSON не попадает в UI и
+выполняется ADK; malformed/unknown JSON не вызывает инструмент; существующий
+non-tool streaming и обработка ошибок не регрессируют.

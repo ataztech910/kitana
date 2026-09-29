@@ -21,7 +21,7 @@ describe('Bible', () => {
     await writer.update({
       step: 'analyst',
       stepIndex: 1,
-      result: { summary: 'Проанализировал рынок' },
+      result: { summary: 'Analyzed the market' },
       tokensUsed: 1500,
       provider: 'claude-sonnet-4-6'
     })
@@ -29,7 +29,7 @@ describe('Bible', () => {
     await writer.update({
       step: 'copywriter',
       stepIndex: 2,
-      result: { summary: 'Написал заголовки' },
+      result: { summary: 'Wrote headlines' },
       tokensUsed: 800,
       provider: 'ollama/llama3'
     })
@@ -42,7 +42,7 @@ describe('Bible', () => {
     expect(context.snapshots).toEqual(['01_analyst.json', '02_copywriter.json'])
 
     const snapshot1 = await reader.getSnapshot(1)
-    expect(snapshot1?.result.summary).toBe('Проанализировал рынок')
+    expect(snapshot1?.result.summary).toBe('Analyzed the market')
   })
 
   it('returns empty context when nothing has been written yet', async () => {

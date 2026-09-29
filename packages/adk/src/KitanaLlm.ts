@@ -14,25 +14,29 @@ function partToMessageText(part: Part): string {
   if (typeof part.text === 'string') return part.text
 
   if (part.functionCall?.name) {
-    return `Вызов инструмента ${part.functionCall.name}: ${JSON.stringify(part.functionCall.args ?? {})}`
+    return `You called function ${part.functionCall.name} with args: ${JSON.stringify(part.functionCall.args ?? {})}`
   }
 
   if (part.functionResponse?.name) {
-    return `Результат вызова ${part.functionResponse.name}: ${JSON.stringify(part.functionResponse.response ?? {})}`
+    return `Function ${part.functionResponse.name} returned: ${JSON.stringify(part.functionResponse.response ?? {})}`
   }
 
   return ''
 }
 
+// Wording matters: CLI providers (e.g. `claude -p`) are agents with native tools of their own. Plain "available tools"
+// makes them look these names up in their own tool system and give up, so the text says these are functions of a
+// text protocol that the caller executes.
 function toolCallingInstructions(declarations: FunctionDeclaration[]): string {
   return [
-    'Доступные инструменты (JSON Schema):',
+    'You can use the following functions through a text protocol. They are NOT your native tools — do not look them up or call them with your own tool system.',
     JSON.stringify(declarations, null, 2),
     '',
-    'Если нужно вызвать инструмент, ответь ТОЛЬКО валидным JSON без markdown и пояснений:',
-    '{"tool_call":{"name":"имя_инструмента","args":{}}}',
-    'Используй только перечисленные инструменты и передавай args согласно их JSON Schema.',
-    'Если инструмент не нужен, ответь обычным текстом.'
+    'To call a function, reply with ONLY this JSON object and nothing else — no markdown, no explanations:',
+    '{"tool_call":{"name":"<function name>","args":{}}}',
+    'The caller runs the function and sends you its result in the next message.',
+    'Use only the functions listed above and pass args that match their JSON Schema.',
+    'If no function call is needed, reply with plain text.'
   ].join('\n')
 }
 

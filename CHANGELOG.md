@@ -1,5 +1,22 @@
 # Changelog
 
+## @kitana-sdk/adk 0.1.9
+
+### Fixed
+
+- **Tool-calling prompt and history are English, and say what they are.** The text protocol used to be in Russian
+  ("Доступные инструменты…", "Вызов инструмента…"), which made models answer in Russian. 0.1.8 translated it
+  literally ("Available tools…"), and `claude -p` — an agent with native tools of its own — then looked the functions
+  up in its own tool system, found nothing and answered "these tools are not available": specialist agents behind
+  `AgentTool` stopped calling tools at all. 0.1.9 describes them as functions of a text protocol that are *not* the
+  model's native tools, executed by the caller. Verified with a real Claude CLI: orchestrator + two specialists 3/3,
+  single agent 2/2, English answers without any "answer in English" hint.
+- Tests guard both: no Cyrillic in anything sent to the model, and the "not your native tools" wording.
+
+### Deprecated
+
+- **0.1.8** — use 0.1.9 (tool calls break with `claude -p`, see above).
+
 ## Stage 1 — Minimal HTTP server (@kitana-sdk/server)
 
 ### Added
