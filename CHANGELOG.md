@@ -1,5 +1,18 @@
 # Changelog
 
+## @kitana-sdk/adk 0.1.10
+
+### Fixed
+
+- **0.1.8 and 0.1.9 were published with an unresolved `"@kitana-sdk/core": "workspace:^0.1.6"` dependency** and fail
+  to install with npm (`Unsupported URL Type "workspace:"`). 0.1.10 has the same code as 0.1.9, published with
+  `pnpm publish`, which rewrites `workspace:` ranges to real versions. Always publish from `packages/<name>` with
+  `pnpm publish`, never `npm publish`.
+
+### Deprecated
+
+- **0.1.8, 0.1.9** — not installable with npm; use 0.1.10.
+
 ## @kitana-sdk/adk 0.1.9
 
 ### Fixed
