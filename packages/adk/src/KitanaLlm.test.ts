@@ -90,8 +90,8 @@ describe('contentsToMessages', () => {
     ] as never)
 
     expect(messages).toEqual([
-      { role: 'assistant', content: 'Вызов инструмента getWeather: {"city":"Vienna"}' },
-      { role: 'user', content: 'Результат вызова getWeather: {"temperature":21}' }
+      { role: 'assistant', content: 'You called function getWeather with args: {"city":"Vienna"}' },
+      { role: 'user', content: 'Function getWeather returned: {"temperature":21}' }
     ])
   })
 })
@@ -176,7 +176,30 @@ describe('KitanaLlm', () => {
     expect(request?.systemPrompt).toContain('getWeather')
     expect(request?.systemPrompt).toContain('Returns the current weather for a city.')
     expect(request?.systemPrompt).toContain('"required": [')
-    expect(request?.systemPrompt).toContain('{"tool_call":{"name":"имя_инструмента","args":{}}}')
+    expect(request?.systemPrompt).toContain('{"tool_call":{"name":"<function name>","args":{}}}')
+    // CLI providers have native tools of their own; the prompt must say these are not them.
+    expect(request?.systemPrompt).toContain('NOT your native tools')
+  })
+
+  it('keeps everything it sends to the model in English (no Cyrillic leaks into answers)', async () => {
+    completeMock.mockResolvedValueOnce(fakeResponse('No tool needed.'))
+    const llm = new KitanaLlm({ model: 'auto' })
+
+    for await (const _ of llm.generateContentAsync(fakeRequest({
+      toolsDict: { getWeather: fakeTool() },
+      contents: [
+        { role: 'user', parts: [{ text: 'hi' }] },
+        { role: 'model', parts: [{ functionCall: { name: 'getWeather', args: { city: 'Vienna' } } }] },
+        { role: 'user', parts: [{ functionResponse: { name: 'getWeather', response: { temperature: 21 } } }] }
+      ]
+    }))) {
+      /* drain */
+    }
+
+    const request = completeMock.mock.calls[0]?.[0]
+    const sent = [request?.systemPrompt ?? '', ...(request?.messages ?? []).map(message => message.content)].join('\n')
+    expect(sent).toContain('You called function getWeather')
+    expect(sent).not.toMatch(/[А-Яа-яЁё]/)
   })
 
   it('converts tool-call JSON into an ADK functionCall part', async () => {

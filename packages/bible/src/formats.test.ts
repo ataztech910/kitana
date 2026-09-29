@@ -11,7 +11,7 @@ describe('formats', () => {
         timestamp: '2026-07-30T10:00:00Z',
         provider: 'claude-sonnet-4-6',
         tokensUsed: 1500,
-        result: { summary: 'Проанализировал рынок, выявил 3 конкурента: X, Y, Z' }
+        result: { summary: 'Analyzed the market, found 3 competitors: X, Y, Z' }
       },
       {
         step: 'copywriter',
@@ -19,7 +19,7 @@ describe('formats', () => {
         timestamp: '2026-07-30T10:05:00Z',
         provider: 'ollama/llama3',
         tokensUsed: 800,
-        result: { summary: 'Написал 5 вариантов заголовка' }
+        result: { summary: 'Wrote 5 headline options' }
       }
     ]
 
@@ -32,7 +32,7 @@ describe('formats', () => {
       step: 'analyst',
       provider: 'claude-sonnet-4-6',
       tokens: 1500,
-      summary: 'Проанализировал рынок, выявил 3 конкурента: X, Y, Z'
+      summary: 'Analyzed the market, found 3 competitors: X, Y, Z'
     })
     expect(parsed[1]).toMatchObject({
       stepIndex: 2,

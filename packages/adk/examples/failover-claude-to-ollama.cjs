@@ -5,7 +5,7 @@ async function main() {
   const agent = new LlmAgent({
     name: 'hello',
     model: new KitanaLlm({ model: 'mistral:instruct', chain: ['claude', 'ollama'] }),
-    instruction: 'Отвечай кратко на русском.'
+    instruction: 'Answer briefly.'
   })
   const sessionService = new InMemorySessionService()
   const runner = new Runner({ agent, appName: 'test', sessionService })
@@ -14,7 +14,7 @@ async function main() {
   for await (const event of runner.runAsync({
     userId: 'user',
     sessionId: session.id,
-    newMessage: { role: 'user', parts: [{ text: 'Привет! Как дела?' }] }
+    newMessage: { role: 'user', parts: [{ text: 'Hi! How are you?' }] }
   })) {
     console.log(JSON.stringify(event, null, 2))
   }
