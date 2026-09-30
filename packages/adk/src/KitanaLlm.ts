@@ -78,20 +78,37 @@ function jsonObjectCandidates(text: string): string[] {
   return [...new Set(candidates)]
 }
 
+function toFunctionCall(candidate: string, allowedNames: ReadonlySet<string>): FunctionCall | undefined {
+  try {
+    const parsed: unknown = JSON.parse(candidate)
+    if (!isRecord(parsed) || !isRecord(parsed.tool_call)) return undefined
+
+    const name = parsed.tool_call.name
+    const args = parsed.tool_call.args
+    if (typeof name !== 'string' || !allowedNames.has(name) || !isRecord(args)) return undefined
+
+    return { name, args }
+  } catch {
+    // Provider output is untrusted text; malformed JSON is a normal text response.
+    return undefined
+  }
+}
+
+// Models regularly drop the last closing brace(s) of a nested tool call — seen with claude -p:
+// `{"tool_call":{"name":"x","args":{"request":"…"}}` (two braces instead of three). Such an answer is still clearly a
+// tool call; without repair it leaks to the caller as raw JSON text and the agent loop stops.
+const TOOL_CALL_START = /^\s*(?:```(?:json)?\s*)?\{\s*"tool_call"\s*:/
+
+function repairTruncated(text: string): string[] {
+  if (!TOOL_CALL_START.test(text)) return []
+  const body = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '')
+  return [1, 2, 3].map(missing => body + '}'.repeat(missing))
+}
+
 export function parseToolCall(text: string, allowedNames: ReadonlySet<string>): FunctionCall | undefined {
-  for (const candidate of jsonObjectCandidates(text)) {
-    try {
-      const parsed: unknown = JSON.parse(candidate)
-      if (!isRecord(parsed) || !isRecord(parsed.tool_call)) continue
-
-      const name = parsed.tool_call.name
-      const args = parsed.tool_call.args
-      if (typeof name !== 'string' || !allowedNames.has(name) || !isRecord(args)) continue
-
-      return { name, args }
-    } catch {
-      // Provider output is untrusted text; malformed JSON is a normal text response.
-    }
+  for (const candidate of [...jsonObjectCandidates(text), ...repairTruncated(text)]) {
+    const call = toFunctionCall(candidate, allowedNames)
+    if (call) return call
   }
 
   return undefined

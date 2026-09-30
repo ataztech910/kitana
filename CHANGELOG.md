@@ -1,5 +1,16 @@
 # Changelog
 
+## @kitana-sdk/adk 0.1.11
+
+### Fixed
+
+- **Tool calls with a missing closing brace are parsed instead of leaking as text.** Seen repeatedly with `claude -p`:
+  `{"tool_call":{"name":"latency_agent","args":{"request":"…"}}` — two closing braces instead of three. The strict
+  parser rejected it, the raw JSON came back as the agent's answer and the agent loop stopped (an orchestrator never
+  called its second specialist). `parseToolCall` now retries an answer that *starts* like a tool call with up to three
+  missing `}` appended; ordinary text, unknown tools and unterminated strings are still not treated as calls.
+  Verified in next-observe's proactive investigation: 0/2 complete before, 2/2 after.
+
 ## @kitana-sdk/adk 0.1.10
 
 ### Fixed
