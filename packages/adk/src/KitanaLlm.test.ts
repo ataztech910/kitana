@@ -14,7 +14,7 @@ vi.mock('@kitana-sdk/core', async () => {
 })
 
 // Imported after the mock so KitanaLlm picks up the mocked createRouter.
-const { KitanaLlm, contentsToMessages, extractText } = await import('./KitanaLlm')
+const { KitanaLlm, contentsToMessages, extractText, parseToolCall } = await import('./KitanaLlm')
 const { createRouter } = await import('@kitana-sdk/core')
 
 function fakeResponse(content: string): CompleteResponse {
@@ -93,6 +93,22 @@ describe('contentsToMessages', () => {
       { role: 'assistant', content: 'You called function getWeather with args: {"city":"Vienna"}' },
       { role: 'user', content: 'Function getWeather returned: {"temperature":21}' }
     ])
+  })
+})
+
+describe('parseToolCall repairs truncated tool calls', () => {
+  const allowed = new Set(['latency_agent'])
+
+  it('accepts a call with missing closing braces (as seen from claude -p)', () => {
+    const truncated = '{"tool_call":{"name":"latency_agent","args":{"request":"Check GET /api/inventory/[id] — p95?"}}'
+    expect(parseToolCall(truncated, allowed)).toEqual({ name: 'latency_agent', args: { request: 'Check GET /api/inventory/[id] — p95?' } })
+    expect(parseToolCall('```json\n{"tool_call":{"name":"latency_agent","args":{}\n```', allowed)).toEqual({ name: 'latency_agent', args: {} })
+  })
+
+  it('does not invent calls from ordinary text or unknown tools', () => {
+    expect(parseToolCall('Diagnosis: chargePayment regressed in v2 {see trace}', allowed)).toBeUndefined()
+    expect(parseToolCall('{"tool_call":{"name":"rm_rf","args":{}}', allowed)).toBeUndefined()
+    expect(parseToolCall('{"tool_call":{"name":"latency_agent","args":{"request":"unterminated', allowed)).toBeUndefined()
   })
 })
 

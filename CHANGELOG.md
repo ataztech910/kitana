@@ -1,5 +1,29 @@
 # Changelog
 
+## @kitana-sdk/adk 0.1.11
+
+### Fixed
+
+- **Tool calls with a missing closing brace are parsed instead of leaking as text.** Seen repeatedly with `claude -p`:
+  `{"tool_call":{"name":"latency_agent","args":{"request":"…"}}` — two closing braces instead of three. The strict
+  parser rejected it, the raw JSON came back as the agent's answer and the agent loop stopped (an orchestrator never
+  called its second specialist). `parseToolCall` now retries an answer that *starts* like a tool call with up to three
+  missing `}` appended; ordinary text, unknown tools and unterminated strings are still not treated as calls.
+  Verified in next-observe's proactive investigation: 0/2 complete before, 2/2 after.
+
+## @kitana-sdk/adk 0.1.10
+
+### Fixed
+
+- **0.1.8 and 0.1.9 were published with an unresolved `"@kitana-sdk/core": "workspace:^0.1.6"` dependency** and fail
+  to install with npm (`Unsupported URL Type "workspace:"`). 0.1.10 has the same code as 0.1.9, published with
+  `pnpm publish`, which rewrites `workspace:` ranges to real versions. Always publish from `packages/<name>` with
+  `pnpm publish`, never `npm publish`.
+
+### Deprecated
+
+- **0.1.8, 0.1.9** — not installable with npm; use 0.1.10.
+
 ## @kitana-sdk/adk 0.1.9
 
 ### Fixed
